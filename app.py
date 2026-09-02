@@ -75,8 +75,11 @@ def config():
 # ── Step 1: Create Razorpay Order ──
 @app.route('/create-order', methods=['POST'])
 def create_order():
-    data = request.json
-    amount = int(data.get('amount', 0))
+    data = request.get_json(force=True, silent=True) or {}
+    try:
+        amount = int(data.get('amount', 0))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'Invalid amount'}), 400
 
     if amount < 1:
         return jsonify({'error': 'Invalid amount'}), 400
