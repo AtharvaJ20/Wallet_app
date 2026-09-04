@@ -91,8 +91,8 @@
   @keyframes si { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
   .ticon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
   .ticon.cr { background: rgba(16,185,129,0.15); } .ticon.db { background: rgba(239,68,68,0.15); }
-  .tinf { flex: 1; }
-  .tdesc { font-size: 13px; color: var(--white); font-weight: 500; }
+  .tinf { flex: 1; min-width: 0; overflow: hidden; }
+  .tdesc { font-size: 13px; color: var(--white); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ttime { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .tamt { font-size: 15px; font-weight: 700; }
   .tamt.cr { color: var(--green); } .tamt.db { color: var(--red); }
@@ -186,23 +186,29 @@
     .stats { grid-template-columns: repeat(2, 1fr); }
     .two-col { grid-template-columns: 1fr; }
     .dg { grid-template-columns: 1fr 1fr; }
+    /* force credentials to single column — auto-fit can be ambiguous near breakpoints */
+    .cg { grid-template-columns: 1fr; }
     .main { padding: 12px; gap: 12px; }
     .dp, .lp { padding: 14px; }
-    /* deduct button: remove max-width constraint on mobile */
     #dbtn { max-width: 100% !important; }
-    /* voucher button row: stack on very small screens */
-    .voucher-actions { flex-direction: column; }
     .toast-c { right: 12px; left: 12px; }
     .toast   { min-width: unset; width: 100%; }
     .cv { font-size: 11px; }
     .ti { padding: 10px 12px; gap: 8px; }
   }
 
-  /* Very small: single column stats */
+  /* Very small: single column stats, single column cards, discount preview wrap */
   @media (max-width: 360px) {
     .stats { grid-template-columns: 1fr; }
     .dg    { grid-template-columns: 1fr; }
     .chips { flex-wrap: wrap; }
+    /* discount preview: allow text and remove button to wrap at 320px */
+    .discount-preview { flex-wrap: wrap; row-gap: 6px; }
+    .dp-remove { margin-left: 0; }
+    /* tighten Apply button padding so input keeps comfortable width */
+    .btn-apply { padding: 0 14px; }
+    /* header subtitle truncates rather than reflowing awkwardly */
+    header p { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
   }
 </style>
 </head>
