@@ -262,6 +262,16 @@
         <div class="ds" onclick="selS(this,'Late Penalty',50)"><div class="sn">⚠️ Penalty Charge</div><div class="sa">₹50</div><div class="sd">Late payment penalty</div></div>
         <div class="ds" onclick="selS(this,'Service Usage Fee',149)"><div class="sn">🔧 Service Usage</div><div class="sa">₹149</div><div class="sd">Per-use service charge</div></div>
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+        <div class="ig">
+          <label>User ID <span style="color:var(--muted);font-size:10px;">(required for voucher)</span></label>
+          <input type="text" id="d-user-id" placeholder="e.g. user_123" style="width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="ig">
+          <label>Voucher Code <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
+          <input type="text" id="d-voucher" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;" />
+        </div>
+      </div>
       <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled style="max-width:200px;">⚡ Deduct from Wallet</button>
     </div>
 
@@ -455,21 +465,62 @@ function selS(el, name, amt) {
 async function deduct() {
   if (!selScen) return;
   if (!internalToken) { toast('Server config not ready — please refresh', 'error'); return; }
-  logAPI('req', `POST /deduct → { amount: ${selScen.amt}, reason: "${selScen.name}" }`);
+
+  const voucherCode = document.getElementById('d-voucher').value.trim().toUpperCase();
+  const userId      = document.getElementById('d-user-id').value.trim();
+
+  let finalAmt    = selScen.amt;
+  let discountPct = 0;
+  let voucherApplied = false;
+
+  if (voucherCode) {
+    if (!userId) { toast('Enter User ID to apply voucher', 'error'); return; }
+    logAPI('req', `POST /redeem-voucher → { user_id: "${userId}", code: "${voucherCode}" }`);
+    try {
+      const vres  = await fetch('/redeem-voucher', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId, code: voucherCode})
+      });
+      const vdata = await vres.json();
+      if (vdata.error) {
+        logAPI('err', `Voucher rejected: ${vdata.error}`);
+        toast(`Voucher: ${vdata.error}`, 'error');
+        return;
+      }
+      discountPct    = vdata.discount_pct;
+      finalAmt       = Math.round(selScen.amt * (1 - discountPct / 100));
+      voucherApplied = true;
+      logAPI('res', `Voucher ${voucherCode} redeemed ✓ → ${discountPct}% off | ₹${selScen.amt} → ₹${finalAmt}`);
+    } catch (err) {
+      logAPI('err', `Voucher network error: ${err.message}`);
+      toast('Could not validate voucher', 'error');
+      return;
+    }
+  }
+
+  const reason = voucherApplied ? `${selScen.name} (${discountPct}% voucher)` : selScen.name;
+  logAPI('req', `POST /deduct → { amount: ${finalAmt}, reason: "${reason}" }`);
   try {
     const res  = await fetch('/deduct', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Internal-Token': internalToken},
-      body: JSON.stringify({amount: selScen.amt, reason: selScen.name})
+      body: JSON.stringify({amount: finalAmt, reason})
     });
     const data = await res.json();
     if (data.success) {
       logAPI('res', `Deducted ✓ → new balance: ₹${data.balance}`);
-      logAPI('sys', `DB: wallet_transactions INSERT debit ₹${selScen.amt}`);
-      totDed += selScen.amt;
+      if (voucherApplied) logAPI('sys', `Voucher savings: ₹${selScen.amt - finalAmt} (${discountPct}% off)`);
+      logAPI('sys', `DB: wallet_transactions INSERT debit ₹${finalAmt}`);
+      totDed += finalAmt;
       updateBal(data.balance);
-      addTx('db', selScen.name, selScen.amt, data.balance);
-      toast(`₹${selScen.amt} deducted — ${selScen.name}`, 'info');
+      addTx('db', reason, finalAmt, data.balance);
+      if (voucherApplied) {
+        toast(`₹${finalAmt} deducted — saved ₹${selScen.amt - finalAmt} with voucher!`, 'success');
+        document.getElementById('d-voucher').value = '';
+      } else {
+        toast(`₹${finalAmt} deducted — ${selScen.name}`, 'info');
+      }
     } else {
       logAPI('err', `Deduction failed: ${data.error}`);
       toast(data.error, 'error');
