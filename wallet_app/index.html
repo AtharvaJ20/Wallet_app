@@ -262,14 +262,14 @@
         <div class="ds" onclick="selS(this,'Late Penalty',50)"><div class="sn">⚠️ Penalty Charge</div><div class="sa">₹50</div><div class="sd">Late payment penalty</div></div>
         <div class="ds" onclick="selS(this,'Service Usage Fee',149)"><div class="sn">🔧 Service Usage</div><div class="sa">₹149</div><div class="sd">Per-use service charge</div></div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div class="two-col" style="margin-bottom:10px;">
         <div class="ig">
           <label>User ID <span style="color:var(--muted);font-size:10px;">(required for voucher)</span></label>
           <input type="text" id="d-user-id" placeholder="e.g. user_123" style="width:100%;box-sizing:border-box;" />
         </div>
         <div class="ig">
           <label>Voucher Code <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
-          <input type="text" id="d-voucher" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;" />
+          <input type="text" id="d-voucher" placeholder="DEMO-20PCT" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;" />
         </div>
       </div>
       <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled style="max-width:200px;">⚡ Deduct from Wallet</button>
@@ -629,6 +629,13 @@ fetch('/config')
     razorpayKeyId = cfg.razorpay_key_id;
     internalToken = cfg.internal_token;
     logAPI('sys', `Razorpay config loaded. Key: ${razorpayKeyId}`);
+    if (cfg.demo_user_id) {
+      document.getElementById('d-user-id').value = cfg.demo_user_id;
+    }
+    if (cfg.demo_voucher_code) {
+      document.getElementById('d-voucher').placeholder = cfg.demo_voucher_code;
+      logAPI('sys', `Demo voucher ready: ${cfg.demo_voucher_code} (20% off) — enter it in System Deductions to apply`);
+    }
   })
   .catch(() => {
     logAPI('err', 'Could not load payment config — payments will not work. Is Flask running?');

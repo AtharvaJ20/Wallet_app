@@ -47,6 +47,29 @@ wallet = {'balance': 0, 'transactions': []}
 # key: voucher code, value: voucher dict
 vouchers = {}
 
+DEMO_USER_ID = 'user_123'
+
+def _seed_demo_voucher() -> str:
+    """Auto-generate a welcome voucher on every server start.
+    Mirrors the wallet reset behaviour: both clear on restart, both
+    are pre-seeded so the demo works immediately on first load.
+    """
+    code    = 'DEMO-20PCT'
+    now_utc = datetime.now(timezone.utc)
+    vouchers[code] = {
+        'code':         code,
+        'user_id':      DEMO_USER_ID,
+        'discount_pct': 20,
+        'is_used':      False,
+        'used_at':      None,
+        'created_at':   now_utc,
+        'expires_at':   now_utc + timedelta(days=365),
+    }
+    print(f"[Demo] Welcome voucher seeded: {code} (20% off, user={DEMO_USER_ID})")
+    return code
+
+DEMO_VOUCHER_CODE = _seed_demo_voucher()
+
 
 def require_internal_token(fn):
     """Verify X-Internal-Token header on system endpoints.
@@ -74,8 +97,10 @@ def index():
 @app.route('/config')
 def config():
     return jsonify({
-        'razorpay_key_id': RAZORPAY_KEY_ID,
-        'internal_token':  INTERNAL_TOKEN,
+        'razorpay_key_id':   RAZORPAY_KEY_ID,
+        'internal_token':    INTERNAL_TOKEN,
+        'demo_voucher_code': DEMO_VOUCHER_CODE,
+        'demo_user_id':      DEMO_USER_ID,
     })
 
 
