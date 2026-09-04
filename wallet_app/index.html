@@ -180,9 +180,11 @@
   @media (max-width: 540px) {
     header h1 { font-size: 15px; }
     header p  { font-size: 11px; }
-    .sidebar { flex-direction: column; padding: 14px; }
+    .sidebar { flex-direction: column; padding: 14px; gap: 16px; }
     /* reset tablet flex-basis:280px — in column direction that becomes a min-height */
     .sidebar > * { flex: none; }
+    .wallet-card { padding: 16px; }
+    .wallet-card::before { width: 70px; height: 70px; }
     .wamt { font-size: 28px; }
     .wamt span { font-size: 15px; }
     .stats { grid-template-columns: repeat(2, 1fr); }
