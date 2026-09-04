@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wallet Demo — Razorpay</title>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0F172A; --surface: #1E293B; --surface2: #273549;
+    --border: #334155; --accent: #6366F1; --green: #10B981;
+    --red: #EF4444; --yellow: #F59E0B; --cyan: #22D3EE;
+    --white: #F8FAFC; --muted: #94A3B8; --text: #CBD5E1;
+  }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .logo { width: 36px; height: 36px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 18px; }
+  header h1 { font-size: 18px; color: var(--white); font-weight: 600; }
+  header p { font-size: 12px; color: var(--muted); }
+  .badge { background: rgba(245,158,11,0.15); border: 1px solid var(--yellow); color: var(--yellow); font-size: 11px; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+  .layout { display: grid; grid-template-columns: 320px 1fr; min-height: calc(100vh - 69px); }
+  .sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+  .wallet-card {
+    background: linear-gradient(135deg, #312e81 0%, #1e1b4b 50%, #0f0e2a 100%);
+    border: 1px solid rgba(99,102,241,0.4); border-radius: 16px; padding: 24px; position: relative; overflow: hidden;
+  }
+  .wallet-card::before { content: ''; position: absolute; top: -30px; right: -30px; width: 120px; height: 120px; border-radius: 50%; background: rgba(99,102,241,0.15); }
+  .wl { font-size: 11px; color: rgba(255,255,255,0.5); letter-spacing: 1px; margin-bottom: 6px; }
+  .wu { font-size: 14px; color: var(--white); margin-bottom: 14px; }
+  .wbl { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 4px; }
+  .wamt { font-size: 36px; font-weight: 700; color: var(--white); }
+  .wamt span { font-size: 18px; font-weight: 400; color: rgba(255,255,255,0.5); }
+  .chips { margin-top: 14px; display: flex; gap: 8px; }
+  .chip { font-size: 10px; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.5); }
+  .chip.active { background: rgba(16,185,129,0.2); color: var(--green); }
+  .sec-title { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 10px; }
+  .amt-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 10px; }
+  .qa { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 8px; font-size: 13px; cursor: pointer; transition: all .15s; }
+  .qa:hover, .qa.sel { border-color: var(--accent); color: var(--white); background: rgba(99,102,241,0.1); }
+  .ig { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+  .ig label { font-size: 12px; color: var(--muted); }
+  input { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--white); font-size: 14px; width: 100%; outline: none; transition: border-color .15s; }
+  input:focus { border-color: var(--accent); }
+  input::placeholder { color: var(--muted); }
+  input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .btn { border: none; cursor: pointer; border-radius: 8px; font-size: 14px; font-weight: 600; padding: 12px 20px; transition: all .15s; width: 100%; }
+  .btn-p { background: var(--accent); color: white; }
+  .btn-p:hover { background: #4f46e5; }
+  .btn-p:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-d { background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); color: var(--red); }
+  .btn-d:hover { background: rgba(239,68,68,0.22); }
+  .btn-d:disabled { opacity: .4; cursor: not-allowed; }
+  .main { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+  .creds-box { background: rgba(245,158,11,0.07); border: 1px solid rgba(245,158,11,0.25); border-radius: 12px; padding: 16px 20px; }
+  .ct { font-size: 12px; color: var(--yellow); font-weight: 600; margin-bottom: 10px; }
+  .cg { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px,1fr)); gap: 10px; }
+  .ci { display: flex; flex-direction: column; gap: 4px; }
+  .cl { font-size: 10px; color: var(--muted); }
+  .cv { font-family: 'Courier New', monospace; font-size: 12px; color: var(--white); background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cpb { font-size: 10px; color: var(--muted); cursor: pointer; background: none; border: none; padding: 0; }
+  .cpb:hover { color: var(--cyan); }
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .sc { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .sl { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+  .sv { font-size: 22px; font-weight: 700; color: var(--white); }
+  .sv.g { color: var(--green); } .sv.r { color: var(--red); } .sv.c { color: var(--cyan); }
+  .dp { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .dh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .dt { font-size: 15px; color: var(--white); font-weight: 600; }
+  .dg { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap: 10px; margin-bottom: 14px; }
+  .ds { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all .15s; }
+  .ds:hover, .ds.sel { border-color: var(--red); background: rgba(239,68,68,0.05); }
+  .sn { font-size: 13px; color: var(--white); font-weight: 500; }
+  .sa { font-size: 20px; color: var(--red); font-weight: 700; }
+  .sd { font-size: 11px; color: var(--muted); }
+  .lp { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .lh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .lt { font-size: 15px; color: var(--white); font-weight: 600; }
+  .lc { font-size: 11px; color: var(--muted); cursor: pointer; background: none; border: none; }
+  .lc:hover { color: var(--red); }
+  .le { text-align: center; color: var(--muted); font-size: 13px; padding: 30px 0; }
+  .tl { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+  .tl::-webkit-scrollbar { width: 4px; }
+  .tl::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .ti { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; animation: si .25s ease; }
+  @keyframes si { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  .ticon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+  .ticon.cr { background: rgba(16,185,129,0.15); } .ticon.db { background: rgba(239,68,68,0.15); }
+  .tinf { flex: 1; }
+  .tdesc { font-size: 13px; color: var(--white); font-weight: 500; }
+  .ttime { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tamt { font-size: 15px; font-weight: 700; }
+  .tamt.cr { color: var(--green); } .tamt.db { color: var(--red); }
+  .tbal { font-size: 11px; color: var(--muted); text-align: right; margin-top: 2px; }
+  .api-box { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-family: 'Courier New', monospace; font-size: 11px; color: #64748b; max-height: 110px; overflow-y: auto; overflow-x: hidden; line-height: 1.6; margin-bottom: 14px; white-space: pre-wrap; word-break: break-all; }
+  .api-box .al { margin-bottom: 2px; }
+  .al.req { color: var(--cyan); } .al.res { color: var(--green); } .al.err { color: var(--red); } .al.sys { color: var(--yellow); }
+  .toast-c { position: fixed; top: 80px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
+  .toast { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--white); box-shadow: 0 8px 24px rgba(0,0,0,0.4); animation: ti .3s ease; min-width: 220px; }
+  .toast.success { border-left: 3px solid var(--green); }
+  .toast.error   { border-left: 3px solid var(--red); }
+  .toast.info    { border-left: 3px solid var(--cyan); }
+  @keyframes ti { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+
+  /* ── Voucher UI ── */
+  .vbadge { display:inline-block; font-size:11px; font-weight:600; padding:4px 12px; border-radius:20px; }
+  .vbadge.valid     { background:rgba(16,185,129,0.15); border:1px solid var(--green);  color:var(--green); }
+  .vbadge.used      { background:rgba(148,163,184,0.12); border:1px solid var(--muted); color:var(--muted); }
+  .vbadge.expired   { background:rgba(245,158,11,0.15); border:1px solid var(--yellow); color:var(--yellow); }
+  .vbadge.not_found { background:rgba(239,68,68,0.12);  border:1px solid var(--red);    color:var(--red); }
+  .vresult  { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:12px; display:none; }
+  .vr-row   { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .vr-label { font-size:12px; color:var(--muted); }
+  .bill-summary { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:12px; display:none; }
+  .bill-row  { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); }
+  .bill-row:last-child { border-bottom:none; }
+  .bill-label { font-size:13px; color:var(--muted); }
+  .bill-val   { font-size:14px; color:var(--white); font-weight:600; }
+  .bill-final { font-size:20px; color:var(--green); font-weight:700; }
+  .code-list  { display:flex; flex-direction:column; gap:6px; }
+  .code-tag   { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:4px 10px; border-radius:6px; font-family:'Courier New',monospace; }
+  .code-tag.applied  { background:rgba(16,185,129,0.10); color:var(--green); border:1px solid rgba(16,185,129,0.3); }
+  .code-tag.rejected { background:rgba(239,68,68,0.08);  color:var(--red);   border:1px solid rgba(239,68,68,0.25); }
+  .codes-wrap    { display:flex; flex-direction:column; gap:6px; }
+  .code-inp-row  { display:flex; gap:6px; align-items:center; }
+  .code-inp-row input { flex:1; text-transform:uppercase; }
+  .code-inp-row .rm { flex-shrink:0; width:34px; height:38px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:6px; color:var(--red); cursor:pointer; font-size:16px; line-height:1; }
+  .code-inp-row .rm:hover { background:rgba(239,68,68,0.18); }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; font-size:12px; font-weight:600; padding:7px 14px; cursor:pointer; transition:all .15s; }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--white); }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* ── Responsive ── */
+  /* Tablet: collapse layout, adjust spacing */
+  @media (max-width: 768px) {
+    header { padding: 12px 16px; }
+    .badge { display: none; }
+    .layout { grid-template-columns: 1fr; min-height: unset; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); padding: 16px; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .sidebar > * { flex: 1 1 280px; }
+    .wallet-card { min-width: 0; }
+    .main { padding: 16px; gap: 16px; }
+    .dp, .lp { padding: 16px; }
+    .creds-box { padding: 12px 14px; overflow-x: hidden; }
+    .dh { flex-wrap: wrap; gap: 6px; }
+  }
+
+  /* Mobile: full single column, tighter padding */
+  @media (max-width: 540px) {
+    header h1 { font-size: 15px; }
+    header p  { font-size: 11px; }
+    .sidebar { flex-direction: column; padding: 14px; }
+    .wamt { font-size: 28px; }
+    .wamt span { font-size: 15px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .dg { grid-template-columns: 1fr 1fr; }
+    .main { padding: 12px; gap: 12px; }
+    .dp, .lp { padding: 14px; }
+    /* deduct button: remove max-width constraint on mobile */
+    #dbtn { max-width: 100% !important; }
+    /* voucher button row: stack on very small screens */
+    .voucher-actions { flex-direction: column; }
+    .toast-c { right: 12px; left: 12px; }
+    .toast   { min-width: unset; width: 100%; }
+    .cv { font-size: 11px; }
+    .ti { padding: 10px 12px; gap: 8px; }
+  }
+
+  /* Very small: single column stats */
+  @media (max-width: 360px) {
+    .stats { grid-template-columns: 1fr; }
+    .dg    { grid-template-columns: 1fr; }
+    .chips { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="logo">💳</div>
+    <div><h1>Wallet Demo</h1><p>Flask + Razorpay Integration</p></div>
+  </div>
+  <span class="badge">🧪 SANDBOX MODE</span>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="wallet-card">
+      <div class="wl">MY WALLET</div>
+      <div class="wu" id="wuser">Demo User</div>
+      <div class="wbl">Available Balance</div>
+      <div class="wamt"><span>₹</span><span id="bal">0</span></div>
+      <div class="chips">
+        <span class="chip active">● Active</span>
+        <span class="chip">Razorpay</span>
+        <span class="chip">Test Mode</span>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">ADD MONEY TO WALLET</div>
+      <div class="amt-grid">
+        <button class="qa" onclick="selAmt(100,this)">₹100</button>
+        <button class="qa" onclick="selAmt(500,this)">₹500</button>
+        <button class="qa" onclick="selAmt(1000,this)">₹1000</button>
+      </div>
+      <div class="ig">
+        <label>Or enter custom amount</label>
+        <input type="number" id="camt" placeholder="Enter ₹ amount" oninput="clearQA()" />
+      </div>
+      <div class="ig">
+        <label>Your name</label>
+        <input type="text" id="uname" placeholder="e.g. Atharva" value="Demo User" />
+      </div>
+      <button class="btn btn-p" onclick="pay()" id="paybtn">💳 Add Money via Razorpay</button>
+    </div>
+
+    <div>
+      <div class="sec-title">WITHDRAW</div>
+      <button class="btn btn-d" onclick="withdraw()">🏦 Withdraw to Bank</button>
+      <p style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;">Triggers Razorpay Payout API → bank (T+1 in production)</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- Test credentials -->
+    <div class="creds-box">
+      <div class="ct">🧪 Razorpay Test Credentials — Use these inside the Razorpay popup</div>
+      <div class="cg">
+        <div class="ci"><span class="cl">✅ SUCCESS UPI</span><div class="cv">success@razorpay <button class="cpb" onclick="cp('success@razorpay',this)">copy</button></div></div>
+        <div class="ci"><span class="cl">❌ FAILURE UPI</span><div class="cv">failure@razorpay <button class="cpb" onclick="cp('failure@razorpay',this)">copy</button></div></div>
+        <div class="ci"><span class="cl">💳 VISA CARD</span><div class="cv">4111 1111 1111 1111 <button class="cpb" onclick="cp('4111111111111111',this)">copy</button></div></div>
+        <div class="ci"><span class="cl">📅 EXPIRY</span><div class="cv">12/26 <button class="cpb" onclick="cp('12/26',this)">copy</button></div></div>
+        <div class="ci"><span class="cl">🔒 CVV</span><div class="cv">123 <button class="cpb" onclick="cp('123',this)">copy</button></div></div>
+        <div class="ci"><span class="cl">📱 OTP</span><div class="cv">1234 <button class="cpb" onclick="cp('1234',this)">copy</button></div></div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="sc"><div class="sl">Total Loaded</div><div class="sv g" id="stl">₹0</div></div>
+      <div class="sc"><div class="sl">Total Deducted</div><div class="sv r" id="std">₹0</div></div>
+      <div class="sc"><div class="sl">Transactions</div><div class="sv c" id="stc">0</div></div>
+    </div>
+
+    <!-- Deductions -->
+    <div class="dp">
+      <div class="dh">
+        <div class="dt">⚡ System Deductions</div>
+        <span style="font-size:12px;color:var(--muted);">Select scenario → Deduct</span>
+      </div>
+      <div class="dg">
+        <div class="ds" onclick="selS(this,'Order #1042',199)"><div class="sn">🛒 Order Placed</div><div class="sa">₹199</div><div class="sd">Customer placed an order</div></div>
+        <div class="ds" onclick="selS(this,'Monthly Subscription',299)"><div class="sn">🔄 Subscription Fee</div><div class="sa">₹299</div><div class="sd">Monthly plan renewal</div></div>
+        <div class="ds" onclick="selS(this,'Late Penalty',50)"><div class="sn">⚠️ Penalty Charge</div><div class="sa">₹50</div><div class="sd">Late payment penalty</div></div>
+        <div class="ds" onclick="selS(this,'Service Usage Fee',149)"><div class="sn">🔧 Service Usage</div><div class="sa">₹149</div><div class="sd">Per-use service charge</div></div>
+      </div>
+      <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled style="max-width:200px;">⚡ Deduct from Wallet</button>
+    </div>
+
+    <!-- Log -->
+    <div class="lp">
+      <div class="lh"><div class="lt">📋 Transaction Log</div><button class="lc" onclick="clearLog()">Clear</button></div>
+      <div class="sec-title" style="margin-bottom:6px;">API ACTIVITY</div>
+      <div class="api-box" id="alog"><div class="al sys">[ SYS ] Flask server connected. Razorpay sandbox ready.</div></div>
+      <div id="tl-wrap">
+        <div class="le" id="lempty">No transactions yet. Add money to get started.</div>
+        <div class="tl" id="tlist" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- Voucher: Redeem -->
+    <div class="dp">
+      <div class="dh">
+        <div class="dt">🎟️ Redeem Voucher</div>
+        <span style="font-size:12px;color:var(--muted);">Apply earned discount to next bill</span>
+      </div>
+      <div class="two-col" style="margin-bottom:12px;">
+        <div class="ig">
+          <label>User ID</label>
+          <input type="text" id="v-user-id" placeholder="e.g. user_123" />
+        </div>
+        <div class="ig">
+          <label>Voucher Code</label>
+          <input type="text" id="v-code" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" />
+        </div>
+      </div>
+      <div class="voucher-actions" style="display:flex;gap:8px;">
+        <button class="btn btn-p" style="flex:1;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);" onclick="checkVoucherStatus()">🔍 Check Status</button>
+        <button class="btn btn-p" style="flex:1;" onclick="redeemVoucher()">✅ Redeem</button>
+      </div>
+      <div class="vresult" id="v-result"></div>
+    </div>
+
+    <!-- Voucher: Billing Simulation -->
+    <div class="dp">
+      <div class="dh">
+        <div class="dt">🧾 Billing Simulation</div>
+        <span style="font-size:12px;color:var(--muted);">Preview invoice with stacked vouchers</span>
+      </div>
+      <div class="two-col" style="margin-bottom:12px;">
+        <div class="ig">
+          <label>User ID</label>
+          <input type="text" id="b-user-id" placeholder="e.g. user_123" />
+        </div>
+        <div class="ig">
+          <label>Invoice Amount (₹)</label>
+          <input type="number" id="b-amount" placeholder="e.g. 1000" min="1" />
+        </div>
+      </div>
+      <div class="ig" style="margin-bottom:10px;">
+        <label>Voucher Codes</label>
+        <div class="codes-wrap" id="b-codes-wrap">
+          <div class="code-inp-row">
+            <input type="text" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" />
+          </div>
+        </div>
+        <button class="btn-ghost" style="margin-top:6px;align-self:flex-start;" onclick="addCodeInput()">+ Add Code</button>
+      </div>
+      <button class="btn btn-p" onclick="simulateBilling()">🧾 Simulate Billing</button>
+      <div class="bill-summary" id="b-result"></div>
+    </div>
+  </main>
+</div>
+
+<div class="toast-c" id="tc"></div>
+
+<script>
+// razorpayKeyId and internalToken are loaded from /config on startup
+let razorpayKeyId = null;
+let internalToken = null;
+let selAmt_ = null, selScen = null;
+let totLoad = 0, totDed = 0, txCnt = 0;
+
+// ── Amount select ──
+function selAmt(a, el) {
+  selAmt_ = a;
+  document.getElementById('camt').value = '';
+  document.querySelectorAll('.qa').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+function clearQA() {
+  selAmt_ = null;
+  document.querySelectorAll('.qa').forEach(b => b.classList.remove('sel'));
+}
+function getAmt() {
+  return selAmt_ || parseInt(document.getElementById('camt').value) || null;
+}
+
+// ── Pay ──
+async function pay() {
+  const amount = getAmt();
+  const name   = document.getElementById('uname').value || 'Demo User';
+  if (!amount || amount < 1) { toast('Enter a valid amount', 'error'); return; }
+  if (!razorpayKeyId) { toast('Payment gateway not ready — please refresh', 'error'); return; }
+
+  const paybtn = document.getElementById('paybtn');
+  paybtn.disabled = true;
+  paybtn.textContent = '⏳ Creating order...';
+  logAPI('req', `POST /create-order → { amount: ${amount} }`);
+
+  // Step 1: create order on backend
+  let data;
+  try {
+    const res = await fetch('/create-order', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({amount})
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Server error ${res.status}`);
+    }
+    data = await res.json();
+  } catch (err) {
+    logAPI('err', `Order creation failed: ${err.message}`);
+    toast(`Order failed: ${err.message}`, 'error');
+    paybtn.disabled = false;
+    paybtn.textContent = '💳 Add Money via Razorpay';
+    return;
+  }
+  logAPI('res', `Order created → order_id: ${data.order_id}`);
+
+  // Step 2: open Razorpay checkout
+  const options = {
+    key: razorpayKeyId,
+    amount: amount * 100,
+    currency: 'INR',
+    order_id: data.order_id,
+    name: 'Wallet Demo',
+    description: 'Add money to wallet',
+    prefill: { name, email: 'demo@test.com', contact: '9999999999' },
+    theme: { color: '#6366F1' },
+    handler: async function(resp) {
+      logAPI('res', `Payment captured → ${resp.razorpay_payment_id}`);
+      logAPI('req', `POST /verify-payment → verifying signature...`);
+
+      // Step 3: verify on backend
+      try {
+        const vres = await fetch('/verify-payment', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({...resp, amount})
+        });
+        if (!vres.ok) {
+          const errBody = await vres.json().catch(() => ({}));
+          throw new Error(errBody.error || `Server error ${vres.status}`);
+        }
+        const vdata = await vres.json();
+
+        if (vdata.success) {
+          logAPI('res', `Signature verified ✓ → balance: ₹${vdata.balance}`);
+          logAPI('sys', `DB: wallet balance updated to ₹${vdata.balance}`);
+          totLoad += amount;
+          updateBal(vdata.balance);
+          addTx('cr', `Added via Razorpay`, amount, vdata.balance);
+          toast(`₹${amount} added to wallet!`, 'success');
+          document.getElementById('wuser').textContent = name;
+        } else {
+          logAPI('err', `Verification failed: ${vdata.error}`);
+          toast('Payment verification failed', 'error');
+        }
+      } catch (err) {
+        logAPI('err', `Verification error: ${err.message}`);
+        toast('Payment verification failed', 'error');
+      }
+    },
+    modal: { ondismiss: () => { logAPI('err', 'Checkout closed by user'); toast('Payment cancelled', 'error'); } }
+  };
+
+  paybtn.disabled = false;
+  paybtn.textContent = '💳 Add Money via Razorpay';
+
+  const rzp = new Razorpay(options);
+  rzp.on('payment.failed', r => { logAPI('err', `Payment failed: ${r.error.description}`); toast('Payment failed', 'error'); });
+  rzp.open();
+}
+
+// ── Scenario ──
+function selS(el, name, amt) {
+  document.querySelectorAll('.ds').forEach(s => s.classList.remove('sel'));
+  el.classList.add('sel');
+  selScen = {name, amt};
+  document.getElementById('dbtn').disabled = false;
+}
+
+// ── Deduct ──
+async function deduct() {
+  if (!selScen) return;
+  if (!internalToken) { toast('Server config not ready — please refresh', 'error'); return; }
+  logAPI('req', `POST /deduct → { amount: ${selScen.amt}, reason: "${selScen.name}" }`);
+  try {
+    const res  = await fetch('/deduct', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Internal-Token': internalToken},
+      body: JSON.stringify({amount: selScen.amt, reason: selScen.name})
+    });
+    const data = await res.json();
+    if (data.success) {
+      logAPI('res', `Deducted ✓ → new balance: ₹${data.balance}`);
+      logAPI('sys', `DB: wallet_transactions INSERT debit ₹${selScen.amt}`);
+      totDed += selScen.amt;
+      updateBal(data.balance);
+      addTx('db', selScen.name, selScen.amt, data.balance);
+      toast(`₹${selScen.amt} deducted — ${selScen.name}`, 'info');
+    } else {
+      logAPI('err', `Deduction failed: ${data.error}`);
+      toast(data.error, 'error');
+    }
+  } catch (err) {
+    logAPI('err', `Network error: ${err.message}`);
+    toast('Could not reach server', 'error');
+  }
+}
+
+// ── Withdraw ──
+async function withdraw() {
+  if (!internalToken) { toast('Server config not ready — please refresh', 'error'); return; }
+  logAPI('req', `POST /withdraw → initiate payout`);
+  try {
+    const res  = await fetch('/withdraw', {method: 'POST', headers: {'X-Internal-Token': internalToken}});
+    const data = await res.json();
+    if (data.success) {
+      const prev = parseInt(document.getElementById('bal').textContent.replace(/,/g, '')) || 0;
+      logAPI('res', `Payout initiated → ₹${prev} to bank (T+1)`);
+      logAPI('sys', `DB: wallet balance reset to 0`);
+      addTx('db', 'Withdrawn to bank account', prev, 0);
+      updateBal(0);
+      toast(`Withdrawal initiated → bank (T+1)`, 'success');
+    } else {
+      logAPI('err', data.error);
+      toast(data.error, 'error');
+    }
+  } catch (err) {
+    logAPI('err', `Network error: ${err.message}`);
+    toast('Could not reach server', 'error');
+  }
+}
+
+// ── Display ──
+function updateBal(b) {
+  document.getElementById('bal').textContent = b.toLocaleString('en-IN');
+  document.getElementById('stl').textContent = '₹' + totLoad.toLocaleString('en-IN');
+  document.getElementById('std').textContent = '₹' + totDed.toLocaleString('en-IN');
+  document.getElementById('stc').textContent = txCnt;
+}
+
+function addTx(type, desc, amt, bal) {
+  txCnt++;
+  const list  = document.getElementById('tlist');
+  const empty = document.getElementById('lempty');
+  empty.style.display = 'none';
+  list.style.display  = 'flex';
+  const now  = new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const item = document.createElement('div');
+  item.className = 'ti';
+  item.innerHTML = `
+    <div class="ticon ${type}">${type==='cr'?'⬆️':'⬇️'}</div>
+    <div class="tinf"><div class="tdesc">${desc}</div><div class="ttime">${now}</div></div>
+    <div><div class="tamt ${type}">${type==='cr'?'+':'-'}₹${amt.toLocaleString('en-IN')}</div><div class="tbal">Bal: ₹${bal.toLocaleString('en-IN')}</div></div>
+  `;
+  list.insertBefore(item, list.firstChild);
+  document.getElementById('stl').textContent = '₹' + totLoad.toLocaleString('en-IN');
+  document.getElementById('std').textContent = '₹' + totDed.toLocaleString('en-IN');
+  document.getElementById('stc').textContent = txCnt;
+}
+
+function logAPI(t, msg) {
+  const box  = document.getElementById('alog');
+  const line = document.createElement('div');
+  line.className = `al ${t}`;
+  const px = {req:'→ REQ',res:'← RES',err:'✗ ERR',sys:'⚙ SYS'}[t]||'';
+  line.textContent = `[ ${px} ] ${msg}`;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+function toast(msg, type='info') {
+  const c = document.getElementById('tc');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span>${{success:'✅',error:'❌',info:'ℹ️'}[type]}</span><span>${msg}</span>`;
+  c.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+function cp(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'copied!'; btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 1500);
+  });
+}
+
+function clearLog() {
+  document.getElementById('tlist').innerHTML = '';
+  document.getElementById('tlist').style.display = 'none';
+  document.getElementById('lempty').style.display = 'block';
+  document.getElementById('alog').innerHTML = '<div class="al sys">[ SYS ] Log cleared.</div>';
+  txCnt = 0; totLoad = 0; totDed = 0;
+  // Re-fetch real balance from server instead of resetting display to 0 (Bug 5 fix)
+  fetch('/balance')
+    .then(r => r.json())
+    .then(d => { updateBal(d.balance); })
+    .catch(() => { toast('Could not fetch balance', 'error'); });
+}
+
+// Load config and balance on start
+fetch('/config')
+  .then(r => r.json())
+  .then(cfg => {
+    razorpayKeyId = cfg.razorpay_key_id;
+    internalToken = cfg.internal_token;
+    logAPI('sys', `Razorpay config loaded. Key: ${razorpayKeyId}`);
+  })
+  .catch(() => {
+    logAPI('err', 'Could not load payment config — payments will not work. Is Flask running?');
+    toast('Payment gateway unavailable', 'error');
+  });
+
+// ── Voucher: Check Status ──
+async function checkVoucherStatus() {
+  const code   = document.getElementById('v-code').value.trim().toUpperCase();
+  const userId = document.getElementById('v-user-id').value.trim();
+  if (!code || !userId) { toast('Enter both user ID and voucher code', 'error'); return; }
+
+  logAPI('req', `GET /voucher-status?code=${code}&user_id=${userId}`);
+  try {
+    const res  = await fetch(`/voucher-status?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId)}`);
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); showVStatus({status:'not_found', _msg: data.error}); return; }
+    logAPI('res', `status=${data.status}${data.discount_pct ? ` | ${data.discount_pct}% off` : ''}`);
+    showVStatus(data);
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
+
+function showVStatus(data) {
+  const el = document.getElementById('v-result');
+  el.style.display = 'block';
+  const map = {
+    valid:     { label:'● VALID',     cls:'valid',     msg: data.discount_pct ? `${data.discount_pct}% discount available` : 'Valid' },
+    used:      { label:'● USED',      cls:'used',      msg:'Already redeemed' },
+    expired:   { label:'● EXPIRED',   cls:'expired',   msg:'This voucher has expired' },
+    not_found: { label:'● NOT FOUND', cls:'not_found', msg: data._msg || 'No voucher found with this code' },
+  };
+  const s = map[data.status] || map['not_found'];
+  const exp = data.expires_at
+    ? `<div class="vr-row" style="margin-top:8px;"><span class="vr-label">Expires</span><span style="font-size:12px;color:var(--muted);">${new Date(data.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span></div>`
+    : '';
+  el.innerHTML = `<div class="vr-row"><span class="vbadge ${s.cls}">${s.label}</span><span style="font-size:13px;color:var(--text);">${s.msg}</span></div>${exp}`;
+}
+
+// ── Voucher: Redeem ──
+async function redeemVoucher() {
+  const code   = document.getElementById('v-code').value.trim().toUpperCase();
+  const userId = document.getElementById('v-user-id').value.trim();
+  if (!code || !userId) { toast('Enter both user ID and voucher code', 'error'); return; }
+
+  logAPI('req', `POST /redeem-voucher → { user_id: "${userId}", code: "${code}" }`);
+  try {
+    const res  = await fetch('/redeem-voucher', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, code})
+    });
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); toast(data.error, 'error'); showVStatus({status:'not_found', _msg: data.error}); return; }
+    if (data.already_redeemed) {
+      logAPI('res', `${code} already redeemed (${data.discount_pct}%)`);
+      toast(`Already redeemed — ${data.discount_pct}% discount`, 'info');
+      showVStatus({status:'used'});
+      return;
+    }
+    logAPI('res', `Redeemed ✓ → ${data.discount_pct}% discount`);
+    toast(`${data.discount_pct}% discount voucher redeemed!`, 'success');
+    const el = document.getElementById('v-result');
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="vr-row"><span class="vbadge valid">✓ REDEEMED</span><span style="font-size:13px;color:var(--green);font-weight:600;">${data.discount_pct}% discount unlocked</span></div>
+      <div class="vr-row" style="margin-top:8px;"><span class="vr-label">Code</span><span style="font-family:'Courier New',monospace;font-size:12px;color:var(--white);">${data.code}</span></div>
+    `;
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
+
+// ── Billing Simulation ──
+function addCodeInput() {
+  const wrap = document.getElementById('b-codes-wrap');
+  const row  = document.createElement('div');
+  row.className = 'code-inp-row';
+  row.innerHTML = `<input type="text" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" /><button class="rm" onclick="this.parentElement.remove()" title="Remove">×</button>`;
+  wrap.appendChild(row);
+}
+
+async function simulateBilling() {
+  const userId = document.getElementById('b-user-id').value.trim();
+  const amount = parseFloat(document.getElementById('b-amount').value);
+  const codes  = Array.from(document.querySelectorAll('#b-codes-wrap input')).map(i => i.value.trim().toUpperCase()).filter(Boolean);
+
+  if (!userId)            { toast('Enter a user ID', 'error'); return; }
+  if (!amount || amount < 1) { toast('Enter a valid invoice amount', 'error'); return; }
+  if (!codes.length)      { toast('Add at least one voucher code', 'error'); return; }
+
+  logAPI('req', `POST /simulate-billing → { user_id: "${userId}", invoice_amount: ${amount}, codes: [${codes.join(', ')}] }`);
+  try {
+    const res  = await fetch('/simulate-billing', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, invoice_amount: amount, codes})
+    });
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); toast(data.error, 'error'); return; }
+    logAPI('res', `Simulation ✓ → ₹${data.original_amount} − ${data.total_discount_pct}% = ₹${data.final_amount}`);
+
+    const appliedHtml  = data.applied.length
+      ? data.applied.map(v  => `<span class="code-tag applied">✓ ${v.code} <strong>−${v.discount_pct}%</strong></span>`).join('')
+      : '<span style="font-size:12px;color:var(--muted);">None</span>';
+    const rejectedHtml = data.rejected.length
+      ? data.rejected.map(v => `<span class="code-tag rejected">✗ ${v.code} <span style="opacity:.7;">(${v.reason.replace(/_/g,' ')})</span></span>`).join('')
+      : '';
+
+    const el = document.getElementById('b-result');
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="bill-row"><span class="bill-label">Original Amount</span><span class="bill-val">₹${data.original_amount.toLocaleString('en-IN')}</span></div>
+      <div class="bill-row"><span class="bill-label">Total Discount</span><span class="bill-val" style="color:var(--yellow);">−${data.total_discount_pct}%</span></div>
+      <div class="bill-row"><span class="bill-label">You Save</span><span class="bill-val" style="color:var(--green);">₹${data.discount_amount.toLocaleString('en-IN')}</span></div>
+      <div class="bill-row"><span class="bill-label" style="font-weight:600;color:var(--white);">Final Amount</span><span class="bill-final">₹${data.final_amount.toLocaleString('en-IN')}</span></div>
+      <div style="margin-top:14px;"><div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;">APPLIED CODES</div><div class="code-list">${appliedHtml}</div></div>
+      ${data.rejected.length ? `<div style="margin-top:10px;"><div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;">REJECTED CODES</div><div class="code-list">${rejectedHtml}</div></div>` : ''}
+    `;
+    toast(`Save ₹${data.discount_amount} — ${data.total_discount_pct}% off`, 'success');
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
+
+fetch('/balance')
+  .then(r => r.json())
+  .then(d => {
+    // Rebuild session stats from server transaction history
+    (d.transactions || []).forEach(tx => {
+      txCnt++;
+      if (tx.type === 'credit') totLoad += tx.amount;
+      else totDed += tx.amount;
+    });
+    updateBal(d.balance);
+    logAPI('sys', `Balance fetched from server: Rs.${d.balance}`);
+  })
+  .catch(() => {
+    logAPI('err', 'Could not fetch balance — is Flask running?');
+    toast('Could not load balance', 'error');
+  });
+</script>
+</body>
+</html>
