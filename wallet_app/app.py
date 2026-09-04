@@ -304,6 +304,75 @@ def voucher_status():
     }), 200
 
 
+# ── Billing Simulation (replace with real billing service call in production) ──
+# Stacking is additive: 10% + 15% = 25% off. Capped at 100%.
+# Codes are validated but NOT marked used — simulation only.
+@app.route('/simulate-billing', methods=['POST'])
+def simulate_billing():
+    data           = request.get_json(force=True)
+    user_id        = data.get('user_id', '').strip()
+    invoice_amount = data.get('invoice_amount')
+    codes          = data.get('codes', [])
+
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+
+    try:
+        invoice_amount = float(invoice_amount)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'invoice_amount must be a number'}), 400
+
+    if invoice_amount <= 0:
+        return jsonify({'error': 'invoice_amount must be greater than 0'}), 400
+
+    if not isinstance(codes, list):
+        return jsonify({'error': 'codes must be a list'}), 400
+
+    now_utc  = datetime.now(timezone.utc)
+    applied  = []
+    rejected = []
+
+    for raw_code in codes:
+        code    = str(raw_code).strip().upper()
+        voucher = vouchers.get(code)
+
+        if voucher is None:
+            rejected.append({'code': code, 'reason': 'not_found'})
+            continue
+
+        if voucher['user_id'] != user_id:
+            rejected.append({'code': code, 'reason': 'not_valid_for_user'})
+            continue
+
+        if voucher['is_used']:
+            rejected.append({'code': code, 'reason': 'already_used'})
+            continue
+
+        if now_utc > voucher['expires_at']:
+            rejected.append({'code': code, 'reason': 'expired'})
+            continue
+
+        applied.append({'code': code, 'discount_pct': voucher['discount_pct']})
+
+    # Additive stacking, capped at 100%
+    total_discount_pct = min(sum(v['discount_pct'] for v in applied), 100)
+    discount_amount    = round(invoice_amount * total_discount_pct / 100, 2)
+    final_amount       = round(invoice_amount - discount_amount, 2)
+
+    print(f"[BillingSim] user={user_id} | invoice=₹{invoice_amount} | "
+          f"discount={total_discount_pct}% | final=₹{final_amount} | "
+          f"applied={[v['code'] for v in applied]} | rejected={[r['code'] for r in rejected]}")
+
+    return jsonify({
+        'original_amount':    invoice_amount,
+        'total_discount_pct': total_discount_pct,
+        'discount_amount':    discount_amount,
+        'final_amount':       final_amount,
+        'applied':            applied,
+        'rejected':           rejected,
+    }), 200
+
+
 if __name__ == '__main__':
     debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
     print("=" * 50)
