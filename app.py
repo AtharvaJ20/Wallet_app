@@ -5,6 +5,9 @@ import hmac
 import hashlib
 import os
 import functools
+import uuid
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 # Load .env file if python-dotenv is installed (optional dev convenience).
 try:
@@ -39,6 +42,10 @@ client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # ── In-memory wallet (replace with DB in production) ──
 wallet = {'balance': 0, 'transactions': []}
+
+# ── In-memory voucher store (replace with DB in production) ──
+# key: voucher code, value: voucher dict
+vouchers = {}
 
 
 def require_internal_token(fn):
@@ -75,11 +82,8 @@ def config():
 # ── Step 1: Create Razorpay Order ──
 @app.route('/create-order', methods=['POST'])
 def create_order():
-    data = request.get_json(force=True, silent=True) or {}
-    try:
-        amount = int(data.get('amount', 0))
-    except (TypeError, ValueError):
-        return jsonify({'error': 'Invalid amount'}), 400
+    data = request.json
+    amount = int(data.get('amount', 0))
 
     if amount < 1:
         return jsonify({'error': 'Invalid amount'}), 400
@@ -183,6 +187,198 @@ def withdraw():
 @app.route('/balance', methods=['GET'])
 def get_balance():
     return jsonify(wallet)
+
+
+# ── Voucher: Generate ──
+@app.route('/generate-voucher', methods=['POST'])
+@require_internal_token
+def generate_voucher():
+    data         = request.get_json(force=True)
+    user_id      = data.get('user_id', '').strip()
+    discount_pct = data.get('discount_pct')
+    expiry_days  = data.get('expiry_days', 30)
+
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+
+    try:
+        discount_pct = int(discount_pct)
+        expiry_days  = int(expiry_days)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'discount_pct and expiry_days must be integers'}), 400
+
+    if not (1 <= discount_pct <= 100):
+        return jsonify({'error': 'discount_pct must be between 1 and 100'}), 400
+
+    if expiry_days < 1:
+        return jsonify({'error': 'expiry_days must be at least 1'}), 400
+
+    code       = f"DISC-{uuid.uuid4().hex[:8].upper()}"
+    now_utc    = datetime.now(timezone.utc)
+    expires_at = now_utc + timedelta(days=expiry_days)
+
+    vouchers[code] = {
+        'code':         code,
+        'user_id':      user_id,
+        'discount_pct': discount_pct,
+        'is_used':      False,
+        'used_at':      None,
+        'created_at':   now_utc,
+        'expires_at':   expires_at,
+    }
+
+    print(f"[Voucher] Generated {code} | {discount_pct}% | user={user_id} | expires={expires_at.isoformat()}")
+    return jsonify({
+        'code':         code,
+        'user_id':      user_id,
+        'discount_pct': discount_pct,
+        'expires_at':   expires_at.isoformat(),
+    }), 201
+
+
+# ── Voucher: Redeem ──
+@app.route('/redeem-voucher', methods=['POST'])
+def redeem_voucher():
+    data    = request.get_json(force=True)
+    user_id = data.get('user_id', '').strip()
+    code    = data.get('code', '').strip().upper()
+
+    if not user_id or not code:
+        return jsonify({'error': 'user_id and code are required'}), 400
+
+    voucher = vouchers.get(code)
+    if voucher is None:
+        return jsonify({'error': 'Voucher not found'}), 404
+
+    if voucher['user_id'] != user_id:
+        return jsonify({'error': 'Voucher not valid for this user'}), 403
+
+    # Expiry is checked first so an expired code always returns 'expired',
+    # regardless of its used state. This keeps response semantics unambiguous
+    # for billing service retries (R-12).
+    if datetime.now(timezone.utc) > voucher['expires_at']:
+        return jsonify({'error': 'Voucher expired'}), 400
+
+    # Idempotent: billing service may retry after a timeout
+    if voucher['is_used']:
+        print(f"[Voucher] {code} already redeemed by user={user_id}")
+        return jsonify({
+            'code':             code,
+            'discount_pct':     voucher['discount_pct'],
+            'already_redeemed': True,
+        }), 200
+
+    voucher['is_used'] = True
+    voucher['used_at'] = datetime.now(timezone.utc)
+
+    print(f"[Voucher] Redeemed {code} | {voucher['discount_pct']}% | user={user_id}")
+    return jsonify({
+        'code':         code,
+        'discount_pct': voucher['discount_pct'],
+        'valid':        True,
+    }), 200
+
+
+# ── Voucher: Status ──
+@app.route('/voucher-status', methods=['GET'])
+def voucher_status():
+    code    = request.args.get('code', '').strip().upper()
+    user_id = request.args.get('user_id', '').strip()
+
+    if not code or not user_id:
+        return jsonify({'error': 'code and user_id query params are required'}), 400
+
+    voucher = vouchers.get(code)
+    if voucher is None:
+        return jsonify({'status': 'not_found'}), 404
+
+    if voucher['user_id'] != user_id:
+        return jsonify({'error': 'Voucher not valid for this user'}), 403
+
+    if voucher['is_used']:
+        return jsonify({'status': 'used', 'discount_pct': voucher['discount_pct']}), 200
+
+    if datetime.now(timezone.utc) > voucher['expires_at']:
+        return jsonify({'status': 'expired', 'discount_pct': voucher['discount_pct']}), 200
+
+    return jsonify({
+        'status':       'valid',
+        'discount_pct': voucher['discount_pct'],
+        'expires_at':   voucher['expires_at'].isoformat(),
+    }), 200
+
+
+# ── Billing Simulation (replace with real billing service call in production) ──
+# Stacking is additive: 10% + 15% = 25% off. Capped at 100%.
+# Codes are validated but NOT marked used — simulation only.
+@app.route('/simulate-billing', methods=['POST'])
+def simulate_billing():
+    data           = request.get_json(force=True)
+    user_id        = data.get('user_id', '').strip()
+    invoice_amount = data.get('invoice_amount')
+    codes          = data.get('codes', [])
+
+    if not user_id:
+        return jsonify({'error': 'user_id is required'}), 400
+
+    try:
+        invoice_amount = float(invoice_amount)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'invoice_amount must be a number'}), 400
+
+    if invoice_amount <= 0:
+        return jsonify({'error': 'invoice_amount must be greater than 0'}), 400
+
+    if not isinstance(codes, list):
+        return jsonify({'error': 'codes must be a list'}), 400
+
+    now_utc  = datetime.now(timezone.utc)
+    applied  = []
+    rejected = []
+
+    for raw_code in codes:
+        code    = str(raw_code).strip().upper()
+        voucher = vouchers.get(code)
+
+        if voucher is None:
+            rejected.append({'code': code, 'reason': 'not_found'})
+            continue
+
+        if voucher['user_id'] != user_id:
+            rejected.append({'code': code, 'reason': 'not_valid_for_user'})
+            continue
+
+        if voucher['is_used']:
+            rejected.append({'code': code, 'reason': 'already_used'})
+            continue
+
+        if now_utc > voucher['expires_at']:
+            rejected.append({'code': code, 'reason': 'expired'})
+            continue
+
+        applied.append({'code': code, 'discount_pct': voucher['discount_pct']})
+
+    # Additive stacking, capped at 100%. Decimal arithmetic avoids float
+    # rounding artefacts on unusual invoice amounts (B-15).
+    total_discount_pct = min(sum(v['discount_pct'] for v in applied), 100)
+    _inv               = Decimal(str(invoice_amount))
+    _pct               = Decimal(str(total_discount_pct))
+    _two_dp            = Decimal('0.01')
+    discount_amount    = float((_inv * _pct / 100).quantize(_two_dp, rounding=ROUND_HALF_UP))
+    final_amount       = float((_inv - Decimal(str(discount_amount))).quantize(_two_dp, rounding=ROUND_HALF_UP))
+
+    print(f"[BillingSim] user={user_id} | invoice=₹{invoice_amount} | "
+          f"discount={total_discount_pct}% | final=₹{final_amount} | "
+          f"applied={[v['code'] for v in applied]} | rejected={[r['code'] for r in rejected]}")
+
+    return jsonify({
+        'original_amount':    invoice_amount,
+        'total_discount_pct': total_discount_pct,
+        'discount_amount':    discount_amount,
+        'final_amount':       final_amount,
+        'applied':            applied,
+        'rejected':           rejected,
+    }), 200
 
 
 if __name__ == '__main__':

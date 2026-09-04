@@ -97,7 +97,7 @@
   .tamt { font-size: 15px; font-weight: 700; }
   .tamt.cr { color: var(--green); } .tamt.db { color: var(--red); }
   .tbal { font-size: 11px; color: var(--muted); text-align: right; margin-top: 2px; }
-  .api-box { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-family: 'Courier New', monospace; font-size: 11px; color: #64748b; max-height: 110px; overflow-y: auto; line-height: 1.6; margin-bottom: 14px; }
+  .api-box { background: #0a0f1a; border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-family: 'Courier New', monospace; font-size: 11px; color: #64748b; max-height: 110px; overflow-y: auto; overflow-x: hidden; line-height: 1.6; margin-bottom: 14px; white-space: pre-wrap; word-break: break-all; }
   .api-box .al { margin-bottom: 2px; }
   .al.req { color: var(--cyan); } .al.res { color: var(--green); } .al.err { color: var(--red); } .al.sys { color: var(--yellow); }
   .toast-c { position: fixed; top: 80px; right: 24px; display: flex; flex-direction: column; gap: 8px; z-index: 999; }
@@ -106,6 +106,78 @@
   .toast.error   { border-left: 3px solid var(--red); }
   .toast.info    { border-left: 3px solid var(--cyan); }
   @keyframes ti { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+
+  /* ── Voucher UI ── */
+  .vbadge { display:inline-block; font-size:11px; font-weight:600; padding:4px 12px; border-radius:20px; }
+  .vbadge.valid     { background:rgba(16,185,129,0.15); border:1px solid var(--green);  color:var(--green); }
+  .vbadge.used      { background:rgba(148,163,184,0.12); border:1px solid var(--muted); color:var(--muted); }
+  .vbadge.expired   { background:rgba(245,158,11,0.15); border:1px solid var(--yellow); color:var(--yellow); }
+  .vbadge.not_found { background:rgba(239,68,68,0.12);  border:1px solid var(--red);    color:var(--red); }
+  .vresult  { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; margin-top:12px; display:none; }
+  .vr-row   { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .vr-label { font-size:12px; color:var(--muted); }
+  .bill-summary { background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:12px; display:none; }
+  .bill-row  { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); }
+  .bill-row:last-child { border-bottom:none; }
+  .bill-label { font-size:13px; color:var(--muted); }
+  .bill-val   { font-size:14px; color:var(--white); font-weight:600; }
+  .bill-final { font-size:20px; color:var(--green); font-weight:700; }
+  .code-list  { display:flex; flex-direction:column; gap:6px; }
+  .code-tag   { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:4px 10px; border-radius:6px; font-family:'Courier New',monospace; }
+  .code-tag.applied  { background:rgba(16,185,129,0.10); color:var(--green); border:1px solid rgba(16,185,129,0.3); }
+  .code-tag.rejected { background:rgba(239,68,68,0.08);  color:var(--red);   border:1px solid rgba(239,68,68,0.25); }
+  .codes-wrap    { display:flex; flex-direction:column; gap:6px; }
+  .code-inp-row  { display:flex; gap:6px; align-items:center; }
+  .code-inp-row input { flex:1; text-transform:uppercase; }
+  .code-inp-row .rm { flex-shrink:0; width:34px; height:38px; background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.25); border-radius:6px; color:var(--red); cursor:pointer; font-size:16px; line-height:1; }
+  .code-inp-row .rm:hover { background:rgba(239,68,68,0.18); }
+  .btn-ghost { background:transparent; border:1px solid var(--border); color:var(--muted); border-radius:6px; font-size:12px; font-weight:600; padding:7px 14px; cursor:pointer; transition:all .15s; }
+  .btn-ghost:hover { border-color:var(--accent); color:var(--white); }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+
+  /* ── Responsive ── */
+  /* Tablet: collapse layout, adjust spacing */
+  @media (max-width: 768px) {
+    header { padding: 12px 16px; }
+    .badge { display: none; }
+    .layout { grid-template-columns: 1fr; min-height: unset; }
+    .sidebar { border-right: none; border-bottom: 1px solid var(--border); padding: 16px; flex-direction: row; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+    .sidebar > * { flex: 1 1 280px; }
+    .wallet-card { min-width: 0; }
+    .main { padding: 16px; gap: 16px; }
+    .dp, .lp { padding: 16px; }
+    .creds-box { padding: 12px 14px; overflow-x: hidden; }
+    .dh { flex-wrap: wrap; gap: 6px; }
+  }
+
+  /* Mobile: full single column, tighter padding */
+  @media (max-width: 540px) {
+    header h1 { font-size: 15px; }
+    header p  { font-size: 11px; }
+    .sidebar { flex-direction: column; padding: 14px; }
+    .wamt { font-size: 28px; }
+    .wamt span { font-size: 15px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+    .dg { grid-template-columns: 1fr 1fr; }
+    .main { padding: 12px; gap: 12px; }
+    .dp, .lp { padding: 14px; }
+    /* deduct button: remove max-width constraint on mobile */
+    #dbtn { max-width: 100% !important; }
+    /* voucher button row: stack on very small screens */
+    .voucher-actions { flex-direction: column; }
+    .toast-c { right: 12px; left: 12px; }
+    .toast   { min-width: unset; width: 100%; }
+    .cv { font-size: 11px; }
+    .ti { padding: 10px 12px; gap: 8px; }
+  }
+
+  /* Very small: single column stats */
+  @media (max-width: 360px) {
+    .stats { grid-template-columns: 1fr; }
+    .dg    { grid-template-columns: 1fr; }
+    .chips { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -202,6 +274,58 @@
         <div class="le" id="lempty">No transactions yet. Add money to get started.</div>
         <div class="tl" id="tlist" style="display:none;"></div>
       </div>
+    </div>
+
+    <!-- Voucher: Redeem -->
+    <div class="dp">
+      <div class="dh">
+        <div class="dt">🎟️ Redeem Voucher</div>
+        <span style="font-size:12px;color:var(--muted);">Apply earned discount to next bill</span>
+      </div>
+      <div class="two-col" style="margin-bottom:12px;">
+        <div class="ig">
+          <label>User ID</label>
+          <input type="text" id="v-user-id" placeholder="e.g. user_123" />
+        </div>
+        <div class="ig">
+          <label>Voucher Code</label>
+          <input type="text" id="v-code" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" />
+        </div>
+      </div>
+      <div class="voucher-actions" style="display:flex;gap:8px;">
+        <button class="btn btn-p" style="flex:1;background:var(--surface2);border:1px solid var(--accent);color:var(--accent);" onclick="checkVoucherStatus()">🔍 Check Status</button>
+        <button class="btn btn-p" style="flex:1;" onclick="redeemVoucher()">✅ Redeem</button>
+      </div>
+      <div class="vresult" id="v-result"></div>
+    </div>
+
+    <!-- Voucher: Billing Simulation -->
+    <div class="dp">
+      <div class="dh">
+        <div class="dt">🧾 Billing Simulation</div>
+        <span style="font-size:12px;color:var(--muted);">Preview invoice with stacked vouchers</span>
+      </div>
+      <div class="two-col" style="margin-bottom:12px;">
+        <div class="ig">
+          <label>User ID</label>
+          <input type="text" id="b-user-id" placeholder="e.g. user_123" />
+        </div>
+        <div class="ig">
+          <label>Invoice Amount (₹)</label>
+          <input type="number" id="b-amount" placeholder="e.g. 1000" min="1" />
+        </div>
+      </div>
+      <div class="ig" style="margin-bottom:10px;">
+        <label>Voucher Codes</label>
+        <div class="codes-wrap" id="b-codes-wrap">
+          <div class="code-inp-row">
+            <input type="text" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" />
+          </div>
+        </div>
+        <button class="btn-ghost" style="margin-top:6px;align-self:flex-start;" onclick="addCodeInput()">+ Add Code</button>
+      </div>
+      <button class="btn btn-p" onclick="simulateBilling()">🧾 Simulate Billing</button>
+      <div class="bill-summary" id="b-result"></div>
     </div>
   </main>
 </div>
@@ -459,6 +583,120 @@ fetch('/config')
     logAPI('err', 'Could not load payment config — payments will not work. Is Flask running?');
     toast('Payment gateway unavailable', 'error');
   });
+
+// ── Voucher: Check Status ──
+async function checkVoucherStatus() {
+  const code   = document.getElementById('v-code').value.trim().toUpperCase();
+  const userId = document.getElementById('v-user-id').value.trim();
+  if (!code || !userId) { toast('Enter both user ID and voucher code', 'error'); return; }
+
+  logAPI('req', `GET /voucher-status?code=${code}&user_id=${userId}`);
+  try {
+    const res  = await fetch(`/voucher-status?code=${encodeURIComponent(code)}&user_id=${encodeURIComponent(userId)}`);
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); showVStatus({status:'not_found', _msg: data.error}); return; }
+    logAPI('res', `status=${data.status}${data.discount_pct ? ` | ${data.discount_pct}% off` : ''}`);
+    showVStatus(data);
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
+
+function showVStatus(data) {
+  const el = document.getElementById('v-result');
+  el.style.display = 'block';
+  const map = {
+    valid:     { label:'● VALID',     cls:'valid',     msg: data.discount_pct ? `${data.discount_pct}% discount available` : 'Valid' },
+    used:      { label:'● USED',      cls:'used',      msg:'Already redeemed' },
+    expired:   { label:'● EXPIRED',   cls:'expired',   msg:'This voucher has expired' },
+    not_found: { label:'● NOT FOUND', cls:'not_found', msg: data._msg || 'No voucher found with this code' },
+  };
+  const s = map[data.status] || map['not_found'];
+  const exp = data.expires_at
+    ? `<div class="vr-row" style="margin-top:8px;"><span class="vr-label">Expires</span><span style="font-size:12px;color:var(--muted);">${new Date(data.expires_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span></div>`
+    : '';
+  el.innerHTML = `<div class="vr-row"><span class="vbadge ${s.cls}">${s.label}</span><span style="font-size:13px;color:var(--text);">${s.msg}</span></div>${exp}`;
+}
+
+// ── Voucher: Redeem ──
+async function redeemVoucher() {
+  const code   = document.getElementById('v-code').value.trim().toUpperCase();
+  const userId = document.getElementById('v-user-id').value.trim();
+  if (!code || !userId) { toast('Enter both user ID and voucher code', 'error'); return; }
+
+  logAPI('req', `POST /redeem-voucher → { user_id: "${userId}", code: "${code}" }`);
+  try {
+    const res  = await fetch('/redeem-voucher', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, code})
+    });
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); toast(data.error, 'error'); showVStatus({status:'not_found', _msg: data.error}); return; }
+    if (data.already_redeemed) {
+      logAPI('res', `${code} already redeemed (${data.discount_pct}%)`);
+      toast(`Already redeemed — ${data.discount_pct}% discount`, 'info');
+      showVStatus({status:'used'});
+      return;
+    }
+    logAPI('res', `Redeemed ✓ → ${data.discount_pct}% discount`);
+    toast(`${data.discount_pct}% discount voucher redeemed!`, 'success');
+    const el = document.getElementById('v-result');
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="vr-row"><span class="vbadge valid">✓ REDEEMED</span><span style="font-size:13px;color:var(--green);font-weight:600;">${data.discount_pct}% discount unlocked</span></div>
+      <div class="vr-row" style="margin-top:8px;"><span class="vr-label">Code</span><span style="font-family:'Courier New',monospace;font-size:12px;color:var(--white);">${data.code}</span></div>
+    `;
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
+
+// ── Billing Simulation ──
+function addCodeInput() {
+  const wrap = document.getElementById('b-codes-wrap');
+  const row  = document.createElement('div');
+  row.className = 'code-inp-row';
+  row.innerHTML = `<input type="text" placeholder="DISC-XXXXXXXX" oninput="this.value=this.value.toUpperCase()" /><button class="rm" onclick="this.parentElement.remove()" title="Remove">×</button>`;
+  wrap.appendChild(row);
+}
+
+async function simulateBilling() {
+  const userId = document.getElementById('b-user-id').value.trim();
+  const amount = parseFloat(document.getElementById('b-amount').value);
+  const codes  = Array.from(document.querySelectorAll('#b-codes-wrap input')).map(i => i.value.trim().toUpperCase()).filter(Boolean);
+
+  if (!userId)            { toast('Enter a user ID', 'error'); return; }
+  if (!amount || amount < 1) { toast('Enter a valid invoice amount', 'error'); return; }
+  if (!codes.length)      { toast('Add at least one voucher code', 'error'); return; }
+
+  logAPI('req', `POST /simulate-billing → { user_id: "${userId}", invoice_amount: ${amount}, codes: [${codes.join(', ')}] }`);
+  try {
+    const res  = await fetch('/simulate-billing', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, invoice_amount: amount, codes})
+    });
+    const data = await res.json();
+    if (data.error) { logAPI('err', data.error); toast(data.error, 'error'); return; }
+    logAPI('res', `Simulation ✓ → ₹${data.original_amount} − ${data.total_discount_pct}% = ₹${data.final_amount}`);
+
+    const appliedHtml  = data.applied.length
+      ? data.applied.map(v  => `<span class="code-tag applied">✓ ${v.code} <strong>−${v.discount_pct}%</strong></span>`).join('')
+      : '<span style="font-size:12px;color:var(--muted);">None</span>';
+    const rejectedHtml = data.rejected.length
+      ? data.rejected.map(v => `<span class="code-tag rejected">✗ ${v.code} <span style="opacity:.7;">(${v.reason.replace(/_/g,' ')})</span></span>`).join('')
+      : '';
+
+    const el = document.getElementById('b-result');
+    el.style.display = 'block';
+    el.innerHTML = `
+      <div class="bill-row"><span class="bill-label">Original Amount</span><span class="bill-val">₹${data.original_amount.toLocaleString('en-IN')}</span></div>
+      <div class="bill-row"><span class="bill-label">Total Discount</span><span class="bill-val" style="color:var(--yellow);">−${data.total_discount_pct}%</span></div>
+      <div class="bill-row"><span class="bill-label">You Save</span><span class="bill-val" style="color:var(--green);">₹${data.discount_amount.toLocaleString('en-IN')}</span></div>
+      <div class="bill-row"><span class="bill-label" style="font-weight:600;color:var(--white);">Final Amount</span><span class="bill-final">₹${data.final_amount.toLocaleString('en-IN')}</span></div>
+      <div style="margin-top:14px;"><div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;">APPLIED CODES</div><div class="code-list">${appliedHtml}</div></div>
+      ${data.rejected.length ? `<div style="margin-top:10px;"><div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;">REJECTED CODES</div><div class="code-list">${rejectedHtml}</div></div>` : ''}
+    `;
+    toast(`Save ₹${data.discount_amount} — ${data.total_discount_pct}% off`, 'success');
+  } catch (err) { logAPI('err', err.message); toast('Could not reach server', 'error'); }
+}
 
 fetch('/balance')
   .then(r => r.json())
