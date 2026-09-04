@@ -135,6 +135,25 @@
   .btn-ghost:hover { border-color:var(--accent); color:var(--white); }
   .two-col { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 
+  /* ── Welcome Banner ── */
+  .welcome-banner { display:flex; align-items:center; gap:14px; background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05)); border:1px solid rgba(16,185,129,.4); border-radius:12px; padding:14px 18px; }
+  .welcome-banner.wb-used { background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(99,102,241,.05)); border-color:rgba(99,102,241,.4); }
+  .wb-icon { font-size:26px; flex-shrink:0; }
+  .wb-title { font-size:14px; font-weight:700; color:var(--white); margin-bottom:3px; }
+  .wb-sub   { font-size:12px; color:var(--muted); }
+
+  /* ── Discount Preview ── */
+  .discount-preview { display:flex; align-items:center; gap:8px; background:rgba(16,185,129,.1); border:1px solid rgba(16,185,129,.3); border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:#10b981; }
+  .dp-remove { margin-left:auto; background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 8px; border-radius:4px; transition:color .15s; white-space:nowrap; }
+  .dp-remove:hover { color:var(--white); }
+
+  /* ── Developer Tools Accordion ── */
+  .dev-tools { border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .dev-tools-toggle { width:100%; display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:var(--surface); border:none; color:var(--muted); font-size:13px; font-weight:600; cursor:pointer; transition:color .15s,background .15s; text-align:left; }
+  .dev-tools-toggle:hover { color:var(--white); background:var(--surface2); }
+  .dev-chevron { font-size:10px; transition:transform .2s; }
+  .dev-tools-body { display:flex; flex-direction:column; gap:12px; padding:0 12px 12px; }
+
   /* ── Responsive ── */
   /* Tablet: collapse layout, adjust spacing */
   @media (max-width: 768px) {
@@ -250,6 +269,15 @@
       <div class="sc"><div class="sl">Transactions</div><div class="sv c" id="stc">0</div></div>
     </div>
 
+    <!-- Welcome Banner -->
+    <div id="welcome-banner" class="welcome-banner" aria-live="polite">
+      <div class="wb-icon">🎁</div>
+      <div class="wb-text">
+        <div class="wb-title">New Member Discount</div>
+        <div class="wb-sub">20% off your first payment. Applies automatically at checkout.</div>
+      </div>
+    </div>
+
     <!-- Deductions -->
     <div class="dp">
       <div class="dh">
@@ -262,17 +290,12 @@
         <div class="ds" onclick="selS(this,'Late Penalty',50)"><div class="sn">⚠️ Penalty Charge</div><div class="sa">₹50</div><div class="sd">Late payment penalty</div></div>
         <div class="ds" onclick="selS(this,'Service Usage Fee',149)"><div class="sn">🔧 Service Usage</div><div class="sa">₹149</div><div class="sd">Per-use service charge</div></div>
       </div>
-      <div class="two-col" style="margin-bottom:10px;">
-        <div class="ig">
-          <label>User ID <span style="color:var(--muted);font-size:10px;">(required for voucher)</span></label>
-          <input type="text" id="d-user-id" placeholder="e.g. user_123" style="width:100%;box-sizing:border-box;" />
-        </div>
-        <div class="ig">
-          <label>Voucher Code <span style="color:var(--muted);font-size:10px;">(optional)</span></label>
-          <input type="text" id="d-voucher" placeholder="DEMO-20PCT" oninput="this.value=this.value.toUpperCase()" style="width:100%;box-sizing:border-box;" />
-        </div>
+      <div id="discount-preview" class="discount-preview" style="display:none;">
+        <span>✓</span>
+        <span id="dp-text">Welcome discount applied</span>
+        <button class="dp-remove" onclick="toggleDiscount(false)" aria-label="Remove discount">Remove</button>
       </div>
-      <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled style="max-width:200px;">⚡ Deduct from Wallet</button>
+      <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled>⚡ Deduct from Wallet</button>
     </div>
 
     <!-- Log -->
@@ -286,8 +309,16 @@
       </div>
     </div>
 
+    <!-- Developer Tools (collapsed) -->
+    <div class="dev-tools">
+      <button class="dev-tools-toggle" onclick="toggleDevTools()" aria-expanded="false" aria-controls="dev-tools-body">
+        🔧 Developer Tools
+        <span class="dev-chevron" aria-hidden="true">▼</span>
+      </button>
+      <div id="dev-tools-body" class="dev-tools-body" hidden>
+
     <!-- Voucher: Redeem -->
-    <div class="dp">
+    <div class="dp" style="margin:0;">
       <div class="dh">
         <div class="dt">🎟️ Redeem Voucher</div>
         <span style="font-size:12px;color:var(--muted);">Apply earned discount to next bill</span>
@@ -337,6 +368,9 @@
       <button class="btn btn-p" onclick="simulateBilling()">🧾 Simulate Billing</button>
       <div class="bill-summary" id="b-result"></div>
     </div>
+
+      </div><!-- /dev-tools-body -->
+    </div><!-- /dev-tools -->
   </main>
 </div>
 
@@ -348,6 +382,11 @@ let razorpayKeyId = null;
 let internalToken = null;
 let selAmt_ = null, selScen = null;
 let totLoad = 0, totDed = 0, txCnt = 0;
+// demo voucher state — set from /config on load
+let demoVoucherCode = null;
+let demoUserId = null;
+let discountActive = true;
+let demoVoucherUsed = false;
 
 // ── Amount select ──
 function selAmt(a, el) {
@@ -458,7 +497,49 @@ function selS(el, name, amt) {
   document.querySelectorAll('.ds').forEach(s => s.classList.remove('sel'));
   el.classList.add('sel');
   selScen = {name, amt};
+  updateDiscountPreview();
   document.getElementById('dbtn').disabled = false;
+}
+
+function updateDiscountPreview() {
+  const preview = document.getElementById('discount-preview');
+  const dpText  = document.getElementById('dp-text');
+  const dbtn    = document.getElementById('dbtn');
+  if (!selScen) return;
+  if (discountActive && demoVoucherCode && !demoVoucherUsed) {
+    const discounted = Math.round(selScen.amt * 0.8);
+    dpText.textContent = `Welcome discount applied: 20% off  ·  ₹${selScen.amt} → ₹${discounted}`;
+    preview.style.display = 'flex';
+    dbtn.textContent = `⚡ Pay ₹${discounted}`;
+  } else {
+    preview.style.display = 'none';
+    dbtn.textContent = '⚡ Deduct from Wallet';
+  }
+}
+
+function toggleDiscount(active) {
+  discountActive = active;
+  updateDiscountPreview();
+}
+
+function updateBanner(state, saved) {
+  const banner = document.getElementById('welcome-banner');
+  if (!banner) return;
+  if (state === 'used') {
+    const saveLine = saved ? ` — you saved ₹${saved}!` : '';
+    banner.innerHTML = `<div class="wb-icon">✅</div><div class="wb-text"><div class="wb-title">Discount Used</div><div class="wb-sub">Welcome discount applied${saveLine}</div></div>`;
+    banner.classList.add('wb-used');
+  }
+}
+
+function toggleDevTools() {
+  const body    = document.getElementById('dev-tools-body');
+  const toggle  = document.querySelector('.dev-tools-toggle');
+  const chevron = toggle.querySelector('.dev-chevron');
+  const opening = body.hidden;
+  body.hidden = !opening;
+  toggle.setAttribute('aria-expanded', String(opening));
+  chevron.textContent = opening ? '▲' : '▼';
 }
 
 // ── Deduct ──
@@ -466,40 +547,40 @@ async function deduct() {
   if (!selScen) return;
   if (!internalToken) { toast('Server config not ready — please refresh', 'error'); return; }
 
-  const voucherCode = document.getElementById('d-voucher').value.trim().toUpperCase();
-  const userId      = document.getElementById('d-user-id').value.trim();
-
-  let finalAmt    = selScen.amt;
-  let discountPct = 0;
+  let finalAmt       = selScen.amt;
+  let discountPct    = 0;
   let voucherApplied = false;
 
-  if (voucherCode) {
-    if (!userId) { toast('Enter User ID to apply voucher', 'error'); return; }
-    logAPI('req', `POST /redeem-voucher → { user_id: "${userId}", code: "${voucherCode}" }`);
+  // Auto-apply welcome discount if still active and not yet used this session
+  if (discountActive && demoVoucherCode && demoUserId && !demoVoucherUsed) {
+    logAPI('req', `POST /redeem-voucher → { user_id: "${demoUserId}", code: "${demoVoucherCode}" }`);
     try {
       const vres  = await fetch('/redeem-voucher', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({user_id: userId, code: voucherCode})
+        body: JSON.stringify({user_id: demoUserId, code: demoVoucherCode})
       });
       const vdata = await vres.json();
-      if (vdata.error) {
-        logAPI('err', `Voucher rejected: ${vdata.error}`);
-        toast(`Voucher: ${vdata.error}`, 'error');
-        return;
+      if (vdata.already_redeemed) {
+        // Idempotent — voucher was already used (e.g. server restart race)
+        logAPI('sys', 'Welcome discount already redeemed — deducting full amount');
+        demoVoucherUsed = true;
+        updateBanner('used');
+        updateDiscountPreview();
+      } else if (vdata.discount_pct) {
+        discountPct    = vdata.discount_pct;
+        finalAmt       = Math.round(selScen.amt * (1 - discountPct / 100));
+        voucherApplied = true;
+        logAPI('res', `Welcome discount redeemed ✓ → ${discountPct}% off | ₹${selScen.amt} → ₹${finalAmt}`);
+      } else {
+        logAPI('err', `Discount not applied: ${vdata.error || 'unknown error'} — deducting full amount`);
       }
-      discountPct    = vdata.discount_pct;
-      finalAmt       = Math.round(selScen.amt * (1 - discountPct / 100));
-      voucherApplied = true;
-      logAPI('res', `Voucher ${voucherCode} redeemed ✓ → ${discountPct}% off | ₹${selScen.amt} → ₹${finalAmt}`);
     } catch (err) {
-      logAPI('err', `Voucher network error: ${err.message}`);
-      toast('Could not validate voucher', 'error');
-      return;
+      logAPI('err', `Voucher check failed: ${err.message} — proceeding without discount`);
     }
   }
 
-  const reason = voucherApplied ? `${selScen.name} (${discountPct}% voucher)` : selScen.name;
+  const reason = voucherApplied ? `${selScen.name} (20% welcome discount)` : selScen.name;
   logAPI('req', `POST /deduct → { amount: ${finalAmt}, reason: "${reason}" }`);
   try {
     const res  = await fetch('/deduct', {
@@ -510,17 +591,20 @@ async function deduct() {
     const data = await res.json();
     if (data.success) {
       logAPI('res', `Deducted ✓ → new balance: ₹${data.balance}`);
-      if (voucherApplied) logAPI('sys', `Voucher savings: ₹${selScen.amt - finalAmt} (${discountPct}% off)`);
+      if (voucherApplied) {
+        const saved = selScen.amt - finalAmt;
+        logAPI('sys', `Voucher savings: ₹${saved} (${discountPct}% off)`);
+        demoVoucherUsed = true;
+        updateBanner('used', saved);
+        updateDiscountPreview();
+        toast(`₹${finalAmt} charged — saved ₹${saved} with welcome discount!`, 'success');
+      } else {
+        toast(`₹${finalAmt} deducted — ${selScen.name}`, 'info');
+      }
       logAPI('sys', `DB: wallet_transactions INSERT debit ₹${finalAmt}`);
       totDed += finalAmt;
       updateBal(data.balance);
       addTx('db', reason, finalAmt, data.balance);
-      if (voucherApplied) {
-        toast(`₹${finalAmt} deducted — saved ₹${selScen.amt - finalAmt} with voucher!`, 'success');
-        document.getElementById('d-voucher').value = '';
-      } else {
-        toast(`₹${finalAmt} deducted — ${selScen.name}`, 'info');
-      }
     } else {
       logAPI('err', `Deduction failed: ${data.error}`);
       toast(data.error, 'error');
@@ -626,15 +710,13 @@ function clearLog() {
 fetch('/config')
   .then(r => r.json())
   .then(cfg => {
-    razorpayKeyId = cfg.razorpay_key_id;
-    internalToken = cfg.internal_token;
+    razorpayKeyId   = cfg.razorpay_key_id;
+    internalToken   = cfg.internal_token;
+    demoVoucherCode = cfg.demo_voucher_code || null;
+    demoUserId      = cfg.demo_user_id      || null;
     logAPI('sys', `Razorpay config loaded. Key: ${razorpayKeyId}`);
-    if (cfg.demo_user_id) {
-      document.getElementById('d-user-id').value = cfg.demo_user_id;
-    }
-    if (cfg.demo_voucher_code) {
-      document.getElementById('d-voucher').placeholder = cfg.demo_voucher_code;
-      logAPI('sys', `Demo voucher ready: ${cfg.demo_voucher_code} (20% off) — enter it in System Deductions to apply`);
+    if (demoVoucherCode) {
+      logAPI('sys', `Demo voucher ${demoVoucherCode} ready — 20% off, applied automatically at checkout`);
     }
   })
   .catch(() => {
