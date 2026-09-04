@@ -7,6 +7,7 @@ import os
 import functools
 import uuid
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 # Load .env file if python-dotenv is installed (optional dev convenience).
 try:
@@ -252,6 +253,12 @@ def redeem_voucher():
     if voucher['user_id'] != user_id:
         return jsonify({'error': 'Voucher not valid for this user'}), 403
 
+    # Expiry is checked first so an expired code always returns 'expired',
+    # regardless of its used state. This keeps response semantics unambiguous
+    # for billing service retries (R-12).
+    if datetime.now(timezone.utc) > voucher['expires_at']:
+        return jsonify({'error': 'Voucher expired'}), 400
+
     # Idempotent: billing service may retry after a timeout
     if voucher['is_used']:
         print(f"[Voucher] {code} already redeemed by user={user_id}")
@@ -260,9 +267,6 @@ def redeem_voucher():
             'discount_pct':     voucher['discount_pct'],
             'already_redeemed': True,
         }), 200
-
-    if datetime.now(timezone.utc) > voucher['expires_at']:
-        return jsonify({'error': 'Voucher expired'}), 400
 
     voucher['is_used'] = True
     voucher['used_at'] = datetime.now(timezone.utc)
@@ -354,10 +358,14 @@ def simulate_billing():
 
         applied.append({'code': code, 'discount_pct': voucher['discount_pct']})
 
-    # Additive stacking, capped at 100%
+    # Additive stacking, capped at 100%. Decimal arithmetic avoids float
+    # rounding artefacts on unusual invoice amounts (B-15).
     total_discount_pct = min(sum(v['discount_pct'] for v in applied), 100)
-    discount_amount    = round(invoice_amount * total_discount_pct / 100, 2)
-    final_amount       = round(invoice_amount - discount_amount, 2)
+    _inv               = Decimal(str(invoice_amount))
+    _pct               = Decimal(str(total_discount_pct))
+    _two_dp            = Decimal('0.01')
+    discount_amount    = float((_inv * _pct / 100).quantize(_two_dp, rounding=ROUND_HALF_UP))
+    final_amount       = float((_inv - Decimal(str(discount_amount))).quantize(_two_dp, rounding=ROUND_HALF_UP))
 
     print(f"[BillingSim] user={user_id} | invoice=₹{invoice_amount} | "
           f"discount={total_discount_pct}% | final=₹{final_amount} | "
