@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Wallet Demo — Razorpay</title>
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
@@ -161,6 +162,20 @@
   .dev-chevron { font-size:10px; transition:transform .2s; }
   .dev-tools-body { display:flex; flex-direction:column; gap:12px; padding:0 12px 12px; }
 
+  /* ── Demo Code Chips ── */
+  .demo-codes { display:none; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px; }
+  .dc-label { font-size:10px; color:var(--muted); flex-shrink:0; }
+  .dc-chip { font-size:10px; padding:3px 9px; border-radius:8px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); color:var(--accent); cursor:pointer; font-family:'Courier New',monospace; transition:all .15s; }
+  .dc-chip:hover { background:rgba(99,102,241,0.22); border-color:var(--accent); color:var(--white); }
+
+  /* ── Expiry label inside discount preview ── */
+  .dp-expiry { font-size:11px; color:var(--muted); white-space:nowrap; }
+
+  /* ── QR Code Wrap ── */
+  #qr-wrap { display:none; flex-direction:column; align-items:center; gap:6px; padding:14px; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; }
+  #qr-canvas canvas, #qr-canvas img { border-radius:6px; display:block; }
+  .qr-code-label { font-size:11px; color:var(--muted); font-family:'Courier New',monospace; letter-spacing:0.08em; }
+
   /* ── Responsive ── */
   /* Tablet: collapse layout, adjust spacing */
   @media (max-width: 768px) {
@@ -311,10 +326,16 @@
         <input type="text" id="d-code" placeholder="Discount code" oninput="this.value=this.value.toUpperCase()" autocomplete="off" aria-label="Discount code" />
         <button class="btn-apply" id="apply-btn" onclick="applyDiscount()">Apply</button>
       </div>
+      <div class="demo-codes" id="demo-codes-hint"></div>
       <div id="discount-preview" class="discount-preview" style="display:none;">
         <span>✓</span>
         <span id="dp-text"></span>
+        <span id="dp-expiry" class="dp-expiry"></span>
         <button class="dp-remove" onclick="removeDiscount()" aria-label="Remove discount">✕ Remove</button>
+      </div>
+      <div id="qr-wrap">
+        <div id="qr-canvas"></div>
+        <div class="qr-code-label" id="qr-label"></div>
       </div>
       <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled>⚡ Deduct from Wallet</button>
     </div>
@@ -344,7 +365,7 @@ let totLoad = 0, totDed = 0, txCnt = 0;
 // demo voucher state — set from /config on load
 let demoVoucherCode = null;
 let demoUserId = null;
-let pendingDiscount = null; // { code, discountPct } when user has applied a code
+let pendingDiscount = null; // { code, discountType, discountValue, expiresAt }
 
 // ── Amount select ──
 function selAmt(a, el) {
@@ -460,19 +481,55 @@ function selS(el, name, amt) {
 }
 
 function updateDiscountPreview() {
-  const preview = document.getElementById('discount-preview');
-  const dpText  = document.getElementById('dp-text');
-  const dbtn    = document.getElementById('dbtn');
+  const preview  = document.getElementById('discount-preview');
+  const dpText   = document.getElementById('dp-text');
+  const dpExpiry = document.getElementById('dp-expiry');
+  const dbtn     = document.getElementById('dbtn');
   if (!selScen) return;
   if (pendingDiscount) {
-    const discounted = Math.round(selScen.amt * (1 - pendingDiscount.discountPct / 100));
-    dpText.textContent = `${pendingDiscount.discountPct}% off · ₹${selScen.amt} → ₹${discounted}`;
+    const { discountType, discountValue, expiresAt } = pendingDiscount;
+    let label, btnLabel;
+    if (discountType === 'fixed') {
+      const discounted = Math.max(0, selScen.amt - discountValue);
+      label    = `₹${discountValue} off · ₹${selScen.amt} → ₹${discounted}`;
+      btnLabel = `⚡ Pay ₹${discounted}`;
+    } else if (discountType === 'points') {
+      label    = `Earn ${discountValue} pts · ₹${discountValue} wallet credit after payment`;
+      btnLabel = `⚡ Pay ₹${selScen.amt} · Earn ${discountValue} pts`;
+    } else {
+      const discounted = Math.round(selScen.amt * (1 - discountValue / 100));
+      label    = `${discountValue}% off · ₹${selScen.amt} → ₹${discounted}`;
+      btnLabel = `⚡ Pay ₹${discounted}`;
+    }
+    dpText.textContent = label;
+    dpExpiry.textContent = expiresAt
+      ? ' · expires ' + new Date(expiresAt).toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'})
+      : '';
     preview.style.display = 'flex';
-    dbtn.textContent = `⚡ Pay ₹${discounted}`;
+    dbtn.textContent = btnLabel;
   } else {
     preview.style.display = 'none';
+    dpExpiry.textContent  = '';
     dbtn.textContent = '⚡ Deduct from Wallet';
   }
+}
+
+function renderQR(code) {
+  const canvas = document.getElementById('qr-canvas');
+  canvas.innerHTML = '';
+  new QRCode(canvas, { text: code, width: 110, height: 110, colorDark: '#f8fafc', colorLight: '#1e293b', correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById('qr-label').textContent = code;
+  document.getElementById('qr-wrap').style.display = 'flex';
+}
+
+function clearQR() {
+  document.getElementById('qr-canvas').innerHTML = '';
+  document.getElementById('qr-wrap').style.display = 'none';
+}
+
+function fillCode(code) {
+  document.getElementById('d-code').value = code;
+  document.getElementById('d-code').focus();
 }
 
 async function applyDiscount() {
@@ -492,10 +549,19 @@ async function applyDiscount() {
     if (data.error) {
       logAPI('err', data.error); toast(data.error, 'error');
     } else if (data.status === 'valid') {
-      pendingDiscount = { code, discountPct: data.discount_pct };
-      logAPI('res', `Code valid → ${data.discount_pct}% off`);
-      toast(`${data.discount_pct}% discount applied!`, 'success');
+      const dtype  = data.discount_type  || 'pct';
+      const dvalue = data.discount_value || data.discount_pct;
+      pendingDiscount = { code, discountType: dtype, discountValue: dvalue, expiresAt: data.expires_at || null };
+      const toastMsg = dtype === 'pct'    ? `${dvalue}% discount applied!`
+                     : dtype === 'fixed'  ? `₹${dvalue} discount applied!`
+                     : `${dvalue} pts reward applied!`;
+      const logMsg   = dtype === 'pct'    ? `${dvalue}% off`
+                     : dtype === 'fixed'  ? `₹${dvalue} off`
+                     : `earn ${dvalue} pts (₹${dvalue} wallet credit)`;
+      logAPI('res', `Code valid → ${logMsg}`);
+      toast(toastMsg, 'success');
       updateDiscountPreview();
+      renderQR(code);
     } else if (data.status === 'used') {
       logAPI('err', `Code ${code} already used`); toast('This code has already been used', 'error');
     } else if (data.status === 'expired') {
@@ -512,6 +578,7 @@ async function applyDiscount() {
 
 function removeDiscount() {
   pendingDiscount = null;
+  clearQR();
   updateDiscountPreview();
 }
 
@@ -530,8 +597,10 @@ async function deduct() {
   if (!selScen) return;
   if (!internalToken) { toast('Server config not ready — please refresh', 'error'); return; }
 
-  let finalAmt = selScen.amt;
+  let finalAmt       = selScen.amt;
   let voucherApplied = false;
+  let pointsCredited = 0;
+  let ptsBal         = null;
 
   if (pendingDiscount) {
     logAPI('req', `POST /redeem-voucher → { user_id: "${demoUserId}", code: "${pendingDiscount.code}" }`);
@@ -542,11 +611,28 @@ async function deduct() {
         body: JSON.stringify({user_id: demoUserId, code: pendingDiscount.code})
       });
       const vdata = await vres.json();
-      if (vdata.discount_pct || vdata.already_redeemed) {
-        const pct = vdata.discount_pct || pendingDiscount.discountPct;
-        finalAmt = Math.round(selScen.amt * (1 - pct / 100));
+      if (vdata.valid || vdata.already_redeemed) {
+        const dtype  = vdata.discount_type  || pendingDiscount.discountType;
+        const dvalue = vdata.discount_value || pendingDiscount.discountValue;
         voucherApplied = true;
-        logAPI('res', `Voucher redeemed ✓ → ${pct}% off | ₹${selScen.amt} → ₹${finalAmt}`);
+        if (dtype === 'fixed') {
+          finalAmt = Math.max(0, selScen.amt - dvalue);
+          logAPI('res', `Voucher redeemed ✓ → ₹${dvalue} off | ₹${selScen.amt} → ₹${finalAmt}`);
+        } else if (dtype === 'points') {
+          finalAmt       = selScen.amt;
+          pointsCredited = vdata.points_credited || dvalue;
+          ptsBal         = vdata.wallet_balance;
+          logAPI('res', `Voucher redeemed ✓ → ${pointsCredited} pts credited to wallet`);
+          if (ptsBal !== null && ptsBal !== undefined) {
+            totLoad += pointsCredited;
+            addTx('cr', `Points reward — ${pendingDiscount.code}`, pointsCredited, ptsBal);
+            updateBal(ptsBal);
+          }
+        } else {
+          const pct = vdata.discount_pct || dvalue;
+          finalAmt = Math.round(selScen.amt * (1 - pct / 100));
+          logAPI('res', `Voucher redeemed ✓ → ${pct}% off | ₹${selScen.amt} → ₹${finalAmt}`);
+        }
       } else {
         logAPI('err', `Voucher error: ${vdata.error || 'unknown'} — deducting full amount`);
       }
@@ -555,7 +641,14 @@ async function deduct() {
     }
   }
 
-  const reason = voucherApplied ? `${selScen.name} (${pendingDiscount.discountPct}% discount)` : selScen.name;
+  const reason = (() => {
+    if (!voucherApplied) return selScen.name;
+    const { discountType, discountValue } = pendingDiscount;
+    if (discountType === 'fixed')  return `${selScen.name} (₹${discountValue} off)`;
+    if (discountType === 'points') return `${selScen.name} (+${discountValue} pts earned)`;
+    return `${selScen.name} (${discountValue}% discount)`;
+  })();
+
   logAPI('req', `POST /deduct → { amount: ${finalAmt}, reason: "${reason}" }`);
   try {
     const res  = await fetch('/deduct', {
@@ -567,12 +660,19 @@ async function deduct() {
     if (data.success) {
       logAPI('res', `Deducted ✓ → new balance: ₹${data.balance}`);
       if (voucherApplied) {
-        const saved = selScen.amt - finalAmt;
-        logAPI('sys', `Voucher savings: ₹${saved} (${pendingDiscount.discountPct}% off)`);
-        updateBanner('used', saved);
-        toast(`₹${finalAmt} charged — saved ₹${saved} with discount!`, 'success');
+        const dtype = pendingDiscount.discountType;
+        if (dtype === 'points') {
+          logAPI('sys', `Points reward: ₹${pointsCredited} wallet credit | charged full ₹${finalAmt}`);
+          toast(`${pointsCredited} pts credited → ₹${pointsCredited} added to wallet!`, 'success');
+        } else {
+          const saved = selScen.amt - finalAmt;
+          logAPI('sys', `Voucher savings: ₹${saved}`);
+          updateBanner('used', saved);
+          toast(`₹${finalAmt} charged — saved ₹${saved} with discount!`, 'success');
+        }
         pendingDiscount = null;
         document.getElementById('d-code').value = '';
+        clearQR();
         updateDiscountPreview();
       } else {
         toast(`₹${finalAmt} deducted — ${selScen.name}`, 'info');
@@ -691,11 +791,22 @@ fetch('/config')
     demoVoucherCode = cfg.demo_voucher_code || null;
     demoUserId      = cfg.demo_user_id      || null;
     logAPI('sys', `Razorpay config loaded. Key: ${razorpayKeyId}`);
+    // Populate demo-code chips for solo URL exploration
+    const demoCodes = cfg.demo_voucher_codes || {};
+    const hint = document.getElementById('demo-codes-hint');
+    if (Object.keys(demoCodes).length) {
+      let html = '<span class="dc-label">Try:</span>';
+      for (const [code, label] of Object.entries(demoCodes)) {
+        html += `<span class="dc-chip" onclick="fillCode('${code}')" title="${label}">${code} <span style="opacity:.6;font-family:sans-serif;">${label}</span></span>`;
+      }
+      hint.innerHTML = html;
+      hint.style.display = 'flex';
+    }
     if (demoVoucherCode) {
       document.getElementById('d-code').value = demoVoucherCode;
       const sub = document.querySelector('#welcome-banner .wb-sub');
-      if (sub) sub.textContent = `Use code ${demoVoucherCode} below for 20% off your first payment.`;
-      logAPI('sys', `Demo voucher ready: ${demoVoucherCode} — 20% off`);
+      if (sub) sub.textContent = 'Try demo codes below — 20% off, ₹50 off, or earn 100 pts.';
+      logAPI('sys', `Demo vouchers ready: ${Object.keys(demoCodes).join(', ')}`);
     }
   })
   .catch(() => {
