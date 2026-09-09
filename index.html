@@ -184,6 +184,7 @@
   #qr-modal-inner { background:var(--card); border-radius:16px; padding:32px 24px 24px; display:flex; flex-direction:column; align-items:center; gap:16px; max-width:360px; width:100%; position:relative; }
   #qr-modal-canvas canvas, #qr-modal-canvas img { border-radius:8px; display:block; }
   #qr-modal-code { font-size:22px; font-weight:700; font-family:'Courier New',monospace; letter-spacing:0.12em; color:var(--text); }
+  #qr-modal-expiry { font-size:11px; color:var(--muted); font-family:'Courier New',monospace; letter-spacing:0.04em; }
   #qr-modal-label { font-size:13px; color:var(--muted); text-align:center; }
   #qr-modal-close { position:absolute; top:12px; right:14px; background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; padding:4px 8px; line-height:1; border-radius:6px; }
   #qr-modal-close:hover { color:var(--text); background:rgba(255,255,255,0.08); }
@@ -357,6 +358,7 @@
           <button id="qr-modal-close" onclick="closeQRModal()" aria-label="Close">✕</button>
           <div id="qr-modal-canvas"></div>
           <div id="qr-modal-code"></div>
+          <div id="qr-modal-expiry"></div>
           <div id="qr-modal-label">Show this to the cashier to scan</div>
         </div>
       </div>
@@ -559,6 +561,10 @@ function openQRModal() {
   modalCanvas.innerHTML = '';
   new QRCode(modalCanvas, { text: code, width: 300, height: 300, colorDark: '#1e293b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
   document.getElementById('qr-modal-code').textContent = code;
+  const exp = pendingDiscount?.expiresAt;
+  document.getElementById('qr-modal-expiry').textContent = exp
+    ? 'Expires ' + new Date(exp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : '';
   document.getElementById('qr-modal').classList.add('open');
   document.getElementById('qr-modal-close').focus();
 }
