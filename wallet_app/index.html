@@ -501,8 +501,8 @@ function selS(el, name, amt) {
   document.querySelectorAll('.ds').forEach(s => s.classList.remove('sel'));
   el.classList.add('sel');
   selScen = {name, amt};
-  document.getElementById('dbtn').disabled = false;
   updateDiscountPreview();
+  document.getElementById('dbtn').disabled = false;
 }
 
 function updateDiscountPreview() {
@@ -521,16 +521,6 @@ function updateDiscountPreview() {
     } else if (discountType === 'points') {
       label    = `Earn ${discountValue} pts · ₹${discountValue} wallet credit after payment`;
       btnLabel = `⚡ Pay ₹${selScen.amt} · Earn ${discountValue} pts`;
-    } else if (discountType === 'wallet_pay') {
-      const remaining = discountValue - selScen.amt;
-      if (remaining < 0) {
-        label    = `Insufficient points — have ${discountValue} pts, need ${selScen.amt} pts`;
-        btnLabel = '⚡ Deduct from Wallet';
-        dbtn.disabled = true;
-      } else {
-        label    = `Pay ${selScen.amt} pts · ${remaining} pts remaining after`;
-        btnLabel = `⚡ Pay with ${selScen.amt} pts`;
-      }
     } else if (discountType === 'points_pay') {
       const remaining = discountValue - selScen.amt;
       if (remaining < 0) {
@@ -618,13 +608,6 @@ async function applyDiscount() {
     } else if (data.status === 'valid') {
       const dtype  = data.discount_type  || 'pct';
       const dvalue = data.discount_value ?? data.discount_pct;
-      if (dtype === 'wallet_pay' && selScen && dvalue < selScen.amt) {
-        logAPI('err', `Insufficient points — have ${dvalue}, need ${selScen.amt}`);
-        toast(`Insufficient points — have ₹${dvalue}, need ₹${selScen.amt}`, 'error');
-        applyBtn.disabled = false;
-        applyBtn.textContent = 'Apply';
-        return;
-      }
       if (dtype === 'points_pay' && selScen && dvalue < selScen.amt) {
         logAPI('err', `Insufficient voucher pts — have ${dvalue}, need ${selScen.amt}`);
         toast(`Insufficient voucher pts — have ${dvalue}, need ${selScen.amt}`, 'error');
@@ -635,12 +618,10 @@ async function applyDiscount() {
       pendingDiscount = { code, discountType: dtype, discountValue: dvalue, expiresAt: data.expires_at || null };
       const toastMsg = dtype === 'pct'        ? `${dvalue}% discount applied!`
                      : dtype === 'fixed'      ? `₹${dvalue} discount applied!`
-                     : dtype === 'wallet_pay' ? `Pay with ${dvalue} pts — applied!`
                      : dtype === 'points_pay' ? `${dvalue} pts voucher applied!`
                      : `${dvalue} pts reward applied!`;
       const logMsg   = dtype === 'pct'        ? `${dvalue}% off`
                      : dtype === 'fixed'      ? `₹${dvalue} off`
-                     : dtype === 'wallet_pay' ? `wallet_pay → ${dvalue} pts available`
                      : dtype === 'points_pay' ? `points_pay → ${dvalue} pts on voucher`
                      : `earn ${dvalue} pts (₹${dvalue} wallet credit)`;
       logAPI('res', `Code valid → ${logMsg}`);
@@ -677,9 +658,6 @@ function updateBanner(state, value) {
   } else if (state === 'points') {
     banner.innerHTML = `<div class="wb-icon">🎯</div><div class="wb-text"><div class="wb-title">Points Earned</div><div class="wb-sub">${value} pts credited — ₹${value} added to your wallet!</div></div>`;
     banner.classList.add('wb-used');
-  } else if (state === 'wallet_pay') {
-    banner.innerHTML = `<div class="wb-icon">💰</div><div class="wb-text"><div class="wb-title">Paid with Points</div><div class="wb-sub">${value} pts remaining in wallet</div></div>`;
-    banner.classList.add('wb-used');
   } else if (state === 'points_pay') {
     banner.innerHTML = `<div class="wb-icon">🎟️</div><div class="wb-text"><div class="wb-title">Paid with Voucher</div><div class="wb-sub">${value} pts remaining on voucher</div></div>`;
     banner.classList.add('wb-used');
@@ -697,7 +675,7 @@ async function deduct() {
   let ptsBal         = null;
 
   if (pendingDiscount) {
-    const needsPurchaseAmt = pendingDiscount.discountType === 'wallet_pay' || pendingDiscount.discountType === 'points_pay';
+    const needsPurchaseAmt = pendingDiscount.discountType === 'points_pay';
     const wpExtra = needsPurchaseAmt ? `, purchase_amount: ${finalAmt}` : '';
     logAPI('req', `POST /redeem-voucher → { user_id: "${demoUserId}", code: "${pendingDiscount.code}"${wpExtra} }`);
     try {
@@ -711,21 +689,7 @@ async function deduct() {
         const dtype  = vdata.discount_type  || pendingDiscount.discountType;
         const dvalue = vdata.discount_value || pendingDiscount.discountValue;
         voucherApplied = true;
-        if (dtype === 'wallet_pay') {
-          const ptsRemaining = vdata.points_remaining;
-          logAPI('res', `Wallet pay redeemed ✓ → ₹${finalAmt} paid with ${finalAmt} pts | ${ptsRemaining} pts remaining`);
-          logAPI('sys', `Wallet balance updated → ${ptsRemaining} pts`);
-          totDed += finalAmt;
-          updateBal(vdata.wallet_balance);
-          addTx('db', `${selScen.name} (paid with ${finalAmt} pts)`, finalAmt, vdata.wallet_balance);
-          toast(`₹${finalAmt} paid with points — ${ptsRemaining} pts remaining!`, 'success');
-          updateBanner('wallet_pay', ptsRemaining);
-          pendingDiscount = null;
-          document.getElementById('d-code').value = '';
-          clearQR();
-          updateDiscountPreview();
-          return;
-        } else if (dtype === 'points_pay') {
+        if (dtype === 'points_pay') {
           const ptsRemaining = vdata.points_remaining;
           logAPI('res', `Voucher pts redeemed ✓ → ${finalAmt} pts used | ${ptsRemaining} pts remaining on voucher`);
           logAPI('sys', `Voucher balance updated → ${ptsRemaining} pts`);
