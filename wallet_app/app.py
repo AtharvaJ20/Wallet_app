@@ -47,6 +47,10 @@ wallet = {'balance': 0, 'transactions': []}
 # key: voucher code, value: voucher dict
 vouchers = {}
 
+# ── In-memory points-voucher balances (separate from wallet balance) ──
+# key: voucher code, value: remaining points balance
+voucher_balances = {}
+
 DEMO_USER_ID = 'user_123'
 
 def _seed_demo_vouchers() -> dict:
@@ -79,7 +83,9 @@ def _seed_demo_vouchers() -> dict:
     return result
 
 DEMO_VOUCHERS     = _seed_demo_vouchers()
-DEMO_VOUCHERS['PAYWALLET'] = 'Pay with pts'
+DEMO_VOUCHERS['PAYWALLET']   = 'Pay with pts'
+DEMO_VOUCHERS['POINTS2000']  = '2000 pts voucher'
+voucher_balances['POINTS2000'] = 2000
 DEMO_VOUCHER_CODE = 'DEMO-20PCT'  # kept for backward compat
 
 
@@ -323,6 +329,37 @@ def redeem_voucher():
             'valid':            True,
         }), 200
 
+    # Points-balance vouchers: deduct purchase_amount from the voucher's own pts balance
+    # wallet['balance'] is never touched in this path
+    if code in voucher_balances:
+        try:
+            purchase_amount = int(data.get('purchase_amount', 0))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'purchase_amount is required for points_pay and must be an integer'}), 400
+        if purchase_amount < 1:
+            return jsonify({'error': 'purchase_amount must be at least 1'}), 400
+        bal = voucher_balances[code]
+        if bal < purchase_amount:
+            return jsonify({'error': 'Insufficient voucher points', 'available': bal, 'required': purchase_amount}), 400
+        voucher_balances[code] -= purchase_amount
+        remaining = voucher_balances[code]
+        wallet['transactions'].append({
+            'type':    'debit',
+            'amount':  purchase_amount,
+            'desc':    f'Paid with voucher pts ({code})',
+            'balance': wallet['balance'],
+        })
+        print(f"[Voucher] {code}: paid {purchase_amount} pts | {remaining} pts remaining on voucher")
+        return jsonify({
+            'code':             code,
+            'discount_type':    'points_pay',
+            'discount_value':   purchase_amount,
+            'points_remaining': remaining,
+            'voucher_balance':  remaining,
+            'wallet_balance':   wallet['balance'],
+            'valid':            True,
+        }), 200
+
     voucher = vouchers.get(code)
     if voucher is None:
         return jsonify({'error': 'Voucher not found'}), 404
@@ -397,6 +434,18 @@ def voucher_status():
             'status':         'valid',
             'discount_type':  'wallet_pay',
             'discount_value': balance,
+            'expires_at':     None,
+        }), 200
+
+    # Points-balance vouchers: have their own pts balance, separate from wallet
+    if code in voucher_balances:
+        bal = voucher_balances[code]
+        if bal <= 0:
+            return jsonify({'error': 'Voucher points exhausted', 'status': 'invalid'}), 400
+        return jsonify({
+            'status':         'valid',
+            'discount_type':  'points_pay',
+            'discount_value': bal,
             'expires_at':     None,
         }), 200
 
