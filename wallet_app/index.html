@@ -172,9 +172,21 @@
   .dp-expiry { font-size:11px; color:var(--muted); white-space:nowrap; }
 
   /* ── QR Code Wrap ── */
-  #qr-wrap { display:none; flex-direction:column; align-items:center; gap:6px; padding:14px; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; }
+  #qr-wrap { display:none; flex-direction:column; align-items:center; gap:8px; padding:16px; background:rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:10px; margin-bottom:12px; cursor:pointer; }
+  #qr-wrap:hover { border-color:var(--accent); }
   #qr-canvas canvas, #qr-canvas img { border-radius:6px; display:block; }
   .qr-code-label { font-size:11px; color:var(--muted); font-family:'Courier New',monospace; letter-spacing:0.08em; }
+  .qr-tap-hint { font-size:10px; color:var(--muted); opacity:0.7; }
+
+  /* ── QR Fullscreen Modal ── */
+  #qr-modal { display:none; position:fixed; inset:0; z-index:1000; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; padding:24px; }
+  #qr-modal.open { display:flex; }
+  #qr-modal-inner { background:var(--card); border-radius:16px; padding:32px 24px 24px; display:flex; flex-direction:column; align-items:center; gap:16px; max-width:360px; width:100%; position:relative; }
+  #qr-modal-canvas canvas, #qr-modal-canvas img { border-radius:8px; display:block; }
+  #qr-modal-code { font-size:22px; font-weight:700; font-family:'Courier New',monospace; letter-spacing:0.12em; color:var(--text); }
+  #qr-modal-label { font-size:13px; color:var(--muted); text-align:center; }
+  #qr-modal-close { position:absolute; top:12px; right:14px; background:none; border:none; font-size:20px; color:var(--muted); cursor:pointer; padding:4px 8px; line-height:1; border-radius:6px; }
+  #qr-modal-close:hover { color:var(--text); background:rgba(255,255,255,0.08); }
 
   /* ── Responsive ── */
   /* Tablet: collapse layout, adjust spacing */
@@ -333,9 +345,20 @@
         <span id="dp-expiry" class="dp-expiry"></span>
         <button class="dp-remove" onclick="removeDiscount()" aria-label="Remove discount">✕ Remove</button>
       </div>
-      <div id="qr-wrap">
+      <div id="qr-wrap" onclick="openQRModal()" role="button" aria-label="Tap to expand QR code" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')openQRModal()">
         <div id="qr-canvas"></div>
         <div class="qr-code-label" id="qr-label"></div>
+        <div class="qr-tap-hint">Tap to expand for scanning</div>
+      </div>
+
+      <!-- QR Fullscreen Modal -->
+      <div id="qr-modal" role="dialog" aria-modal="true" aria-labelledby="qr-modal-code" onclick="closeQRModal()">
+        <div id="qr-modal-inner" onclick="event.stopPropagation()">
+          <button id="qr-modal-close" onclick="closeQRModal()" aria-label="Close">✕</button>
+          <div id="qr-modal-canvas"></div>
+          <div id="qr-modal-code"></div>
+          <div id="qr-modal-label">Show this to the cashier to scan</div>
+        </div>
       </div>
       <button class="btn btn-d" id="dbtn" onclick="deduct()" disabled>⚡ Deduct from Wallet</button>
     </div>
@@ -517,14 +540,32 @@ function updateDiscountPreview() {
 function renderQR(code) {
   const canvas = document.getElementById('qr-canvas');
   canvas.innerHTML = '';
-  new QRCode(canvas, { text: code, width: 110, height: 110, colorDark: '#f8fafc', colorLight: '#1e293b', correctLevel: QRCode.CorrectLevel.M });
+  new QRCode(canvas, { text: code, width: 220, height: 220, colorDark: '#f8fafc', colorLight: '#1e293b', correctLevel: QRCode.CorrectLevel.M });
   document.getElementById('qr-label').textContent = code;
   document.getElementById('qr-wrap').style.display = 'flex';
+  document.getElementById('qr-wrap').dataset.code = code;
 }
 
 function clearQR() {
   document.getElementById('qr-canvas').innerHTML = '';
   document.getElementById('qr-wrap').style.display = 'none';
+  closeQRModal();
+}
+
+function openQRModal() {
+  const code = document.getElementById('qr-wrap').dataset.code;
+  if (!code) return;
+  const modalCanvas = document.getElementById('qr-modal-canvas');
+  modalCanvas.innerHTML = '';
+  new QRCode(modalCanvas, { text: code, width: 300, height: 300, colorDark: '#1e293b', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.M });
+  document.getElementById('qr-modal-code').textContent = code;
+  document.getElementById('qr-modal').classList.add('open');
+  document.getElementById('qr-modal-close').focus();
+}
+
+function closeQRModal() {
+  document.getElementById('qr-modal').classList.remove('open');
+  document.getElementById('qr-modal-canvas').innerHTML = '';
 }
 
 function fillCode(code) {
@@ -835,6 +876,10 @@ fetch('/balance')
     logAPI('err', 'Could not fetch balance — is Flask running?');
     toast('Could not load balance', 'error');
   });
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeQRModal();
+});
 </script>
 </body>
 </html>
