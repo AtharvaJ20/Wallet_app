@@ -49,26 +49,37 @@ vouchers = {}
 
 DEMO_USER_ID = 'user_123'
 
-def _seed_demo_voucher() -> str:
-    """Auto-generate a welcome voucher on every server start.
-    Mirrors the wallet reset behaviour: both clear on restart, both
-    are pre-seeded so the demo works immediately on first load.
+def _seed_demo_vouchers() -> dict:
+    """Seed three demo vouchers on every server start — one per voucher type.
+    All reset with the server so the demo is always in a clean state.
+    Returns {code: label} for /config.
     """
-    code    = 'DEMO-20PCT'
     now_utc = datetime.now(timezone.utc)
-    vouchers[code] = {
-        'code':         code,
-        'user_id':      DEMO_USER_ID,
-        'discount_pct': 20,
-        'is_used':      False,
-        'used_at':      None,
-        'created_at':   now_utc,
-        'expires_at':   now_utc + timedelta(days=365),
-    }
-    print(f"[Demo] Welcome voucher seeded: {code} (20% off, user={DEMO_USER_ID})")
-    return code
+    expires = now_utc + timedelta(days=365)
+    demos = [
+        ('DEMO-20PCT', 'pct',    20,  '20% off'),
+        ('SAVE50',     'fixed',  50,  '₹50 off'),
+        ('EARN100',    'points', 100, '100 pts'),
+    ]
+    result = {}
+    for code, dtype, dvalue, label in demos:
+        vouchers[code] = {
+            'code':           code,
+            'user_id':        DEMO_USER_ID,
+            'discount_type':  dtype,
+            'discount_value': dvalue,
+            'discount_pct':   dvalue if dtype == 'pct' else 0,
+            'is_used':        False,
+            'used_at':        None,
+            'created_at':     now_utc,
+            'expires_at':     expires,
+        }
+        result[code] = label
+        print(f"[Demo] Voucher seeded: {code} ({label}, user={DEMO_USER_ID})")
+    return result
 
-DEMO_VOUCHER_CODE = _seed_demo_voucher()
+DEMO_VOUCHERS     = _seed_demo_vouchers()
+DEMO_VOUCHER_CODE = 'DEMO-20PCT'  # kept for backward compat
 
 
 def require_internal_token(fn):
@@ -97,10 +108,11 @@ def index():
 @app.route('/config')
 def config():
     return jsonify({
-        'razorpay_key_id':   RAZORPAY_KEY_ID,
-        'internal_token':    INTERNAL_TOKEN,
-        'demo_voucher_code': DEMO_VOUCHER_CODE,
-        'demo_user_id':      DEMO_USER_ID,
+        'razorpay_key_id':    RAZORPAY_KEY_ID,
+        'internal_token':     INTERNAL_TOKEN,
+        'demo_voucher_code':  DEMO_VOUCHER_CODE,
+        'demo_voucher_codes': DEMO_VOUCHERS,
+        'demo_user_id':       DEMO_USER_ID,
     })
 
 
@@ -218,22 +230,30 @@ def get_balance():
 @app.route('/generate-voucher', methods=['POST'])
 @require_internal_token
 def generate_voucher():
-    data         = request.get_json(force=True)
-    user_id      = data.get('user_id', '').strip()
-    discount_pct = data.get('discount_pct')
-    expiry_days  = data.get('expiry_days', 30)
+    data          = request.get_json(force=True)
+    user_id       = data.get('user_id', '').strip()
+    discount_type = data.get('discount_type', 'pct').strip().lower()
+    # Accept discount_value or legacy discount_pct for pct type
+    discount_value = data.get('discount_value') or data.get('discount_pct')
+    expiry_days    = data.get('expiry_days', 30)
 
     if not user_id:
         return jsonify({'error': 'user_id is required'}), 400
 
-    try:
-        discount_pct = int(discount_pct)
-        expiry_days  = int(expiry_days)
-    except (TypeError, ValueError):
-        return jsonify({'error': 'discount_pct and expiry_days must be integers'}), 400
+    if discount_type not in ('pct', 'fixed', 'points'):
+        return jsonify({'error': "discount_type must be 'pct', 'fixed', or 'points'"}), 400
 
-    if not (1 <= discount_pct <= 100):
-        return jsonify({'error': 'discount_pct must be between 1 and 100'}), 400
+    try:
+        discount_value = int(discount_value)
+        expiry_days    = int(expiry_days)
+    except (TypeError, ValueError):
+        return jsonify({'error': 'discount_value and expiry_days must be integers'}), 400
+
+    if discount_type == 'pct' and not (1 <= discount_value <= 100):
+        return jsonify({'error': 'discount_value must be 1–100 for pct type'}), 400
+
+    if discount_type in ('fixed', 'points') and discount_value < 1:
+        return jsonify({'error': 'discount_value must be at least 1'}), 400
 
     if expiry_days < 1:
         return jsonify({'error': 'expiry_days must be at least 1'}), 400
@@ -243,21 +263,24 @@ def generate_voucher():
     expires_at = now_utc + timedelta(days=expiry_days)
 
     vouchers[code] = {
-        'code':         code,
-        'user_id':      user_id,
-        'discount_pct': discount_pct,
-        'is_used':      False,
-        'used_at':      None,
-        'created_at':   now_utc,
-        'expires_at':   expires_at,
+        'code':           code,
+        'user_id':        user_id,
+        'discount_type':  discount_type,
+        'discount_value': discount_value,
+        'discount_pct':   discount_value if discount_type == 'pct' else 0,
+        'is_used':        False,
+        'used_at':        None,
+        'created_at':     now_utc,
+        'expires_at':     expires_at,
     }
 
-    print(f"[Voucher] Generated {code} | {discount_pct}% | user={user_id} | expires={expires_at.isoformat()}")
+    print(f"[Voucher] Generated {code} | {discount_type}:{discount_value} | user={user_id} | expires={expires_at.isoformat()}")
     return jsonify({
-        'code':         code,
-        'user_id':      user_id,
-        'discount_pct': discount_pct,
-        'expires_at':   expires_at.isoformat(),
+        'code':           code,
+        'user_id':        user_id,
+        'discount_type':  discount_type,
+        'discount_value': discount_value,
+        'expires_at':     expires_at.isoformat(),
     }), 201
 
 
@@ -296,11 +319,34 @@ def redeem_voucher():
     voucher['is_used'] = True
     voucher['used_at'] = datetime.now(timezone.utc)
 
-    print(f"[Voucher] Redeemed {code} | {voucher['discount_pct']}% | user={user_id}")
+    dtype  = voucher.get('discount_type', 'pct')
+    dvalue = voucher.get('discount_value', voucher.get('discount_pct', 0))
+
+    if dtype == 'points':
+        wallet['balance'] += dvalue
+        wallet['transactions'].append({
+            'type':    'credit',
+            'amount':  dvalue,
+            'desc':    f'Points reward redeemed ({code})',
+            'balance': wallet['balance'],
+        })
+        print(f"[Voucher] Points redeemed {code} | {dvalue} pts → ₹{dvalue} | user={user_id}")
+        return jsonify({
+            'code':            code,
+            'discount_type':   'points',
+            'discount_value':  dvalue,
+            'points_credited': dvalue,
+            'wallet_balance':  wallet['balance'],
+            'valid':           True,
+        }), 200
+
+    print(f"[Voucher] Redeemed {code} | {dtype}:{dvalue} | user={user_id}")
     return jsonify({
-        'code':         code,
-        'discount_pct': voucher['discount_pct'],
-        'valid':        True,
+        'code':           code,
+        'discount_type':  dtype,
+        'discount_value': dvalue,
+        'discount_pct':   voucher.get('discount_pct', 0),
+        'valid':          True,
     }), 200
 
 
@@ -327,9 +373,11 @@ def voucher_status():
         return jsonify({'status': 'expired', 'discount_pct': voucher['discount_pct']}), 200
 
     return jsonify({
-        'status':       'valid',
-        'discount_pct': voucher['discount_pct'],
-        'expires_at':   voucher['expires_at'].isoformat(),
+        'status':         'valid',
+        'discount_type':  voucher.get('discount_type', 'pct'),
+        'discount_value': voucher.get('discount_value', voucher.get('discount_pct', 0)),
+        'discount_pct':   voucher.get('discount_pct', 0),
+        'expires_at':     voucher['expires_at'].isoformat(),
     }), 200
 
 
@@ -381,16 +429,29 @@ def simulate_billing():
             rejected.append({'code': code, 'reason': 'expired'})
             continue
 
-        applied.append({'code': code, 'discount_pct': voucher['discount_pct']})
+        dtype  = voucher.get('discount_type', 'pct')
+        dvalue = voucher.get('discount_value', voucher.get('discount_pct', 0))
+        # Points are rewards, not billing discounts — skip in billing simulation
+        if dtype == 'points':
+            rejected.append({'code': code, 'reason': 'points_not_a_billing_discount'})
+            continue
+        applied.append({'code': code, 'discount_type': dtype, 'discount_value': dvalue,
+                        'discount_pct': voucher.get('discount_pct', 0)})
 
-    # Additive stacking, capped at 100%. Decimal arithmetic avoids float
+    # Compute total discount. pct types stack additively (capped at 100%);
+    # fixed types are summed as rupee amounts. Decimal arithmetic avoids float
     # rounding artefacts on unusual invoice amounts (B-15).
-    total_discount_pct = min(sum(v['discount_pct'] for v in applied), 100)
-    _inv               = Decimal(str(invoice_amount))
-    _pct               = Decimal(str(total_discount_pct))
-    _two_dp            = Decimal('0.01')
-    discount_amount    = float((_inv * _pct / 100).quantize(_two_dp, rounding=ROUND_HALF_UP))
-    final_amount       = float((_inv - Decimal(str(discount_amount))).quantize(_two_dp, rounding=ROUND_HALF_UP))
+    _inv    = Decimal(str(invoice_amount))
+    _two_dp = Decimal('0.01')
+
+    total_pct_discount   = min(sum(v['discount_pct'] for v in applied if v['discount_type'] == 'pct'), 100)
+    total_fixed_discount = sum(v['discount_value'] for v in applied if v['discount_type'] == 'fixed')
+
+    pct_discount_amount   = (_inv * Decimal(str(total_pct_discount)) / 100).quantize(_two_dp, rounding=ROUND_HALF_UP)
+    fixed_discount_amount = min(Decimal(str(total_fixed_discount)), _inv)
+    discount_amount       = float(min(pct_discount_amount + fixed_discount_amount, _inv))
+    final_amount          = float((_inv - Decimal(str(discount_amount))).quantize(_two_dp, rounding=ROUND_HALF_UP))
+    total_discount_pct    = round(discount_amount / float(_inv) * 100, 2) if float(_inv) > 0 else 0
 
     print(f"[BillingSim] user={user_id} | invoice=₹{invoice_amount} | "
           f"discount={total_discount_pct}% | final=₹{final_amount} | "

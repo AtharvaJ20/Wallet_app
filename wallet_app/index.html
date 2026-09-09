@@ -550,7 +550,7 @@ async function applyDiscount() {
       logAPI('err', data.error); toast(data.error, 'error');
     } else if (data.status === 'valid') {
       const dtype  = data.discount_type  || 'pct';
-      const dvalue = data.discount_value || data.discount_pct;
+      const dvalue = data.discount_value ?? data.discount_pct;
       pendingDiscount = { code, discountType: dtype, discountValue: dvalue, expiresAt: data.expires_at || null };
       const toastMsg = dtype === 'pct'    ? `${dvalue}% discount applied!`
                      : dtype === 'fixed'  ? `₹${dvalue} discount applied!`
@@ -582,12 +582,15 @@ function removeDiscount() {
   updateDiscountPreview();
 }
 
-function updateBanner(state, saved) {
+function updateBanner(state, value) {
   const banner = document.getElementById('welcome-banner');
   if (!banner) return;
   if (state === 'used') {
-    const saveLine = saved ? ` — you saved ₹${saved}!` : '';
+    const saveLine = value ? ` — you saved ₹${value}!` : '';
     banner.innerHTML = `<div class="wb-icon">✅</div><div class="wb-text"><div class="wb-title">Discount Used</div><div class="wb-sub">Welcome discount applied${saveLine}</div></div>`;
+    banner.classList.add('wb-used');
+  } else if (state === 'points') {
+    banner.innerHTML = `<div class="wb-icon">🎯</div><div class="wb-text"><div class="wb-title">Points Earned</div><div class="wb-sub">${value} pts credited — ₹${value} added to your wallet!</div></div>`;
     banner.classList.add('wb-used');
   }
 }
@@ -664,6 +667,7 @@ async function deduct() {
         if (dtype === 'points') {
           logAPI('sys', `Points reward: ₹${pointsCredited} wallet credit | charged full ₹${finalAmt}`);
           toast(`${pointsCredited} pts credited → ₹${pointsCredited} added to wallet!`, 'success');
+          updateBanner('points', pointsCredited);
         } else {
           const saved = selScen.amt - finalAmt;
           logAPI('sys', `Voucher savings: ₹${saved}`);
