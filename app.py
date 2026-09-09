@@ -79,6 +79,7 @@ def _seed_demo_vouchers() -> dict:
     return result
 
 DEMO_VOUCHERS     = _seed_demo_vouchers()
+DEMO_VOUCHERS['PAYWALLET'] = 'Pay with pts'
 DEMO_VOUCHER_CODE = 'DEMO-20PCT'  # kept for backward compat
 
 
@@ -294,6 +295,34 @@ def redeem_voucher():
     if not user_id or not code:
         return jsonify({'error': 'user_id and code are required'}), 400
 
+    # PAYWALLET: inline handling — deducts purchase_amount from wallet, never marked used
+    if code == 'PAYWALLET':
+        try:
+            purchase_amount = int(data.get('purchase_amount', 0))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'purchase_amount is required for PAYWALLET and must be an integer'}), 400
+        if purchase_amount < 1:
+            return jsonify({'error': 'purchase_amount must be at least 1'}), 400
+        balance = wallet['balance']
+        if balance < purchase_amount:
+            return jsonify({'error': 'Insufficient balance', 'available': balance, 'required': purchase_amount}), 400
+        wallet['balance'] -= purchase_amount
+        wallet['transactions'].append({
+            'type':    'debit',
+            'amount':  purchase_amount,
+            'desc':    'Paid with points (PAYWALLET)',
+            'balance': wallet['balance'],
+        })
+        print(f"[Voucher] PAYWALLET: paid ₹{purchase_amount} with points | {wallet['balance']} pts remaining")
+        return jsonify({
+            'code':             'PAYWALLET',
+            'discount_type':    'wallet_pay',
+            'discount_value':   purchase_amount,
+            'points_remaining': wallet['balance'],
+            'wallet_balance':   wallet['balance'],
+            'valid':            True,
+        }), 200
+
     voucher = vouchers.get(code)
     if voucher is None:
         return jsonify({'error': 'Voucher not found'}), 404
@@ -358,6 +387,18 @@ def voucher_status():
 
     if not code or not user_id:
         return jsonify({'error': 'code and user_id query params are required'}), 400
+
+    # PAYWALLET: always-valid, reads live wallet balance each time
+    if code == 'PAYWALLET':
+        balance = wallet['balance']
+        if balance <= 0:
+            return jsonify({'error': 'No points balance available', 'status': 'invalid'}), 400
+        return jsonify({
+            'status':         'valid',
+            'discount_type':  'wallet_pay',
+            'discount_value': balance,
+            'expires_at':     None,
+        }), 200
 
     voucher = vouchers.get(code)
     if voucher is None:

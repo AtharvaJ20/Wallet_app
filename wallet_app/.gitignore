@@ -1,0 +1,18 @@
+# Environment — never commit secrets
+.env
+
+# Python artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
